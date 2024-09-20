@@ -2,6 +2,8 @@
 $condapath="replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
+$version="0.0.4"
+
 function MakeChoice{
     param($choice_text, $choice_help)
     if (![bool]$choice_help) {$choice_help=$choice_text}
@@ -19,7 +21,7 @@ function ReadMagicKey{
 
 $skip_error_print = "12893ehn91bncd91"
 try {
-
+    Write-Host "Script version: $version" -ForegroundColor DarkGreen
 
     $wsh = New-Object -comObject WScript.Shell
     $dgpu = (Get-WmiObject Win32_VideoController).Name | Select-String -Pattern "Intel\(R\) Arc\(TM\) ([A-C]\d{2,5}[A-Z]{0,2})"
