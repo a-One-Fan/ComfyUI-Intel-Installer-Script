@@ -387,7 +387,7 @@ try:
         if (chosen_custom_nodes == 0):
             print("Applying SUPIR fixes...")
             replaceTextInFile("./cenv/lib/site-packages/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
-            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device)", "mps(device) or comfy.model_management.is_intel_xpu()")
+            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             print("Done.")
 
 
