@@ -71,10 +71,10 @@ try {
         (MakeChoice "Download a model")
         (MakeChoice "Activate environment" "Convenience option to activate the conda environment (after ComfyUI is installed)")
     )
-    $chosen = $Host.UI.PromptForChoice("---", "What to do?", $choices, 0)
-    #$chosen = 0
+    $chosen_install = $Host.UI.PromptForChoice("---", "What to do?", $choices, 0)
+    #$chosen_install = 0
 
-    if ($chosen -eq 0){
+    if ($chosen_install -eq 0){
         ####################################
         #         Install ComfyUI          #
         ####################################
@@ -104,15 +104,34 @@ try {
         }
         Write-Host "`n"
     
+        $custom_nodes_info = @(
+            [PSCustomObject]@{Name = "GGUF"; Description = "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM"; link="https://github.com/city96/ComfyUI-GGUF"},
+            [PSCustomObject]@{Name = "BrushNet"; Description = "More intelligent inpainting, and using any SD1.5/XL model"; link="https://github.com/nullquant/ComfyUI-BrushNet"},
+            [PSCustomObject]@{Name = "Impact Pack"; Description = "Pack of nodes for object segmentation and dealing with masks"; link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"},
+            [PSCustomObject]@{Name = "SUPIR"; Description = "High quality upscaling for realistic images"; link="https://github.com/kijai/ComfyUI-SUPIR"},
+            [PSCustomObject]@{Name = "rghtree"; Description = "Optimizes ComfyUI execution, adds progressbar and various misc. utility nodes"; link="https://github.com/rgthree/rgthree-comfy"},
+            [PSCustomObject]@{Name = "ExtraModels"; Description = "Allows running additionals non-SD models (such as Pixart)"; link="https://github.com/city96/ComfyUI_ExtraModels"},
+            [PSCustomObject]@{Name = "IPAdapter Plus"; Description = "Image Prompts"; link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"},
+            [PSCustomObject]@{Name = "Controlnet aux"; Description = "Additional Controlnet preprocessors"; link="https://github.com/Fannovel16/comfyui_controlnet_aux"}
+            #[PSCustomObject]@{Name = "Pysssss custom scripts"; Description = "Play sound node, various UI additions"; link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"}
+        )
+        
+        Write-Output "Would you like to install all of the following custom nodes:"
+        $custom_nodes_info | Format-Table -Property Name, Description
+        Write-Output "Note: Many of these require additional models to function, whuch you can download using this script after installing."
+        $choices = [System.Management.Automation.Host.ChoiceDescription[]]@(
+            (MakeChoice "Yes"),
+            (MakeChoice "No")
+        )
+        $chosen_custom_nodes = $Host.UI.PromptForChoice("", "", $choices, 0)
     
         # Slightly more organized stuff
         mkdir $foldername | Out-Null
         Set-Location ./${foldername} | Out-Null
         
         
-        # Set up code
+        # ComfyUI, hijacks
         git clone https://github.com/comfyanonymous/ComfyUI
-        
         Set-Location ./ComfyUI/comfy
         git clone https://github.com/Disty0/ipex_to_cuda
         Write-Output "Applying Disty's hijacks (thanks!)"
@@ -120,17 +139,33 @@ try {
         Set-Content model_management.py
         Set-Location ../..
         
-        Set-Location ./ComfyUI/custom_nodes
-        git clone https://github.com/city96/ComfyUI-GGUF
-        Set-Location ../..
-        
         # Install dependencies
         & ${condapath}/shell/condabin/conda-hook.ps1
         conda create -p ./cenv python=3.10 -y
         conda activate ./cenv
-        conda install pkg-config libuv libpng -y
+        conda install pkg-config libuv libpng libjpeg -y
         pip install -r ./ComfyUI/requirements.txt
-        pip install -r ./ComfyUI/custom_nodes/ComfyUI-GGUF/requirements.txt
+
+        if ($chosen_custom_nodes -eq 0){
+            Set-Location ./ComfyUI/custom_nodes
+            
+            foreach ($cn in $custom_nodes_info) {
+                if (($model.$key.link) -match '\/([^\/]+)$') {
+                    $folder = $Matches[1]
+                } else {
+                    throw "Could not find folder for $($cn.link) ($cn, $($cn.Name))"
+                }
+
+                git clone $cn.link
+                if (Test-Path ./$folder/requirements.txt) {
+                    pip install -r requirements.txt
+                }
+                if ($cn.Name -eq "Impact Pack") {
+                    
+                }
+            }
+        }
+
         if ($dgpu) {
             python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu `
             --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
@@ -159,7 +194,7 @@ try {
         conda deactivate
         Set-Location ..
         Write-Host "`n`nComfyUI is set up. Press any key to continue.`n" -ForegroundColor Green
-    }elseif($chosen -eq 1){
+    }elseif($chosen_install -eq 1){
         ##################################
         #        Download a model        #
         ##################################
