@@ -13,4 +13,4 @@ open a command prompt in the same folder as the script (shift+right click folder
 
 Additionally, you will need [git](https://git-scm.com/download/win) and [miniconda](https://docs.anaconda.com/miniconda/#latest-miniconda-installer-links) or some other form of anaconda installed.
 
-You can download the script from above, or from [here](https://raw.githubusercontent.com/a-One-Fan/ComfyUI-Intel-Installer-Script/refs/heads/one/Setup_ComfyUI_Intel.ps1), then right clicking and choosing "save as".
+You can download the script from above, or from [here](https://raw.githubusercontent.com/a-One-Fan/ComfyUI-Intel-Installer-Script/refs/heads/one/Setup_ComfyUI_Intel.py), then right clicking and choosing "save as".
