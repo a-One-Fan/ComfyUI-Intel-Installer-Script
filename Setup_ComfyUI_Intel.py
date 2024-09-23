@@ -87,7 +87,7 @@ def printColored(text, color: str, newline: bool = True):
     end = "\n" if newline else ""
     print(col+str(text)+COLORS["Default"], end=end)
 
-def readShortcut() -> str:
+def readShortcut(path: str) -> str:
     #TODO: Implement me?
     #$conda_cmd_shortcut = $wsh.CreateShortcut("${Env:AppData}\Microsoft\Windows\Start Menu\Programs\Anaconda3 (64-bit)\Anaconda Prompt.lnk")
     #$conda_cmd_shortcut.Arguments | Select-String -Pattern "([A-Z]:[\w \\\/]+)\\Scripts\\activate\.bat"
