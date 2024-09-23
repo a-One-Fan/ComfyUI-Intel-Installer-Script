@@ -7,7 +7,7 @@ version = "0.0.5"
 import os
 import re
 import subprocess
-import requests
+import urllib.request as req
 import traceback
 import threading
 
@@ -187,10 +187,10 @@ def formatTable(things: list[object] | list[dict], props: list[str], pad: int = 
         print("")
     
 def downloadFile(link: str, filename: str):
-    r = requests.get(link)
-    f = open(filename, 'wb')
-    f.write(r.content)
-    f.close()
+    opener = req.build_opener()
+    opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+    req.install_opener(opener)
+    req.urlretrieve(link, filename)
 
 def clone_or_pull(link: str):
     folder = re.search(r"\/([^\/]+)$", link)[1]
@@ -210,27 +210,42 @@ try:
     FOLDERNAME = "Comfy_Intel"
     CENVNAME = "cenv"
     
+    UserProfile = os.environ.get("UserProfile", "")
+    AppData = os.environ.get("AppData", "")
+    Home = os.environ.get("HOME", "")
+
     # Autodetect conda
     if (not os.path.isdir(condapath)):
-        condapath = f"{os.environ["UserProfile"]}\\miniconda3"
-        if (not os.path.isdir(condapath)):
-            condapath = f"{os.environ["UserProfile"]}\\anaconda3"
-            if (not os.path.isdir(condapath)):
-                if os.path.isdir(f"{os.environ["AppData"]}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)"):
-                    sh_args = readShortcut(f"{os.environ["AppData"]}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)\\Anaconda Prompt.lnk")
-                    condapath_re = re.search(r"([A-Z]:[\w \\\/]+)\\Scripts\\activate\.bat", sh_args)
-                    if condapath_re:
-                        condapath = condapath_re[1]
+        conda_locs = [f"{UserProfile}\\miniconda3", f"{UserProfile}\\anaconda3", f"{Home}/anaconda3", f"{Home}/miniconda3"]
+
+        if os.path.isdir(f"{AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)"):
+            sh_args = readShortcut(f"{AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)\\Anaconda Prompt.lnk")
+            condapath_re = re.search(r"([A-Z]:[\w \\\/]+)\\Scripts\\activate\.bat", sh_args)
+            if condapath_re:
+                conda_locs.append(condapath_re[1])
+        
+        for loc in conda_locs:
+            if os.path.isdir(loc):
+                condapath = loc
+                break
     
     # Missing Conda/Git warnings 
     if (not os.path.isdir(condapath)):
         print("Conda not found. If you already have Conda installed, open this file with a text editor and put Conda's path in the \"quoted location\" on the first line.")
         print("You can download Conda from: https://docs.anaconda.com/miniconda/#latest-miniconda-installer-links")
+        if IS_WINDOWS:
+            print("Would you like to have this script install conda for you?")
+            choice = promptForChoice("", "", (("Yes", "No")))
+            if choice == 0:
+                subprocess.call(["C:\Windows\System32\cmd.exe", "curl", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe", "-o", "miniconda.exe"])
+                subprocess.call(["C:\Windows\System32\cmd.exe", "start", "/wait", "", ".\\miniconda.exe", "/S"])
+                subprocess.call(["C:\Windows\System32\cmd.exe", "del", "miniconda.exe"])
+                print("Miniconda installed.")
         raise SkipErrorPrintException
     
     
     try:
-        o = subprocess.check_output("git --version")
+        o = subprocess.check_output(("git", "--version"))
     except:
         print("Git not found.")
         print("You can download Git from: https://git-scm.com/download/win")
@@ -466,8 +481,8 @@ try:
 
         pixart_sigma_base = DownloadableFile("https://huggingface.co/PixArt-alpha/PixArt-Sigma/resolve/main/PixArt-Sigma-XL-2-1024-MS.pth", 2652)
 
-        dreamshaper_8_ba =  DownloadableFile("https://civitai.com/api/download/models/128713?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008)
-        drmsh8r_8_inp_ba =  DownloadableFile("https://civitai.com/api/download/models/131004?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008)
+        dreamshaper_8_ba =  DownloadableFile("https://civitai.com/api/download/models/128713?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008, filename_override="dreamshaper_8.safetensors")
+        drmsh8r_8_inp_ba =  DownloadableFile("https://civitai.com/api/download/models/131004?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008, filename_override="dreamshaper_8_inpainting.safetensors")
         
         fluxdev4bit =       DownloadableCollection([ae, t5_8, clip_l, fluxdev4b_u], "Flux.1 Dev 4-bit", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
         fluxschnell4bit =   DownloadableCollection([ae, t5_8, clip_l, fluxschnell4b_u], "Flux.1 Schnell 4-bit")
