@@ -38,10 +38,11 @@ class Conda:
     p = None
     print_thread = None
     def __init__(self, condapath: str):
-        self.p = subprocess.Popen(args=[f"& {condapath}/shell/condabin/conda-hook.ps1"], executable="C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        self.p = subprocess.Popen(args=[], executable="C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = os.getcwd(), shell = False)
         self.print_thread = threading.Thread(target=print_stdout, args=(self.p,))
         self.print_thread.start()
+        self.do(f"(& \"{condapath}\\Scripts\\conda.exe\"" + " \"shell.powershell\" \"hook\") | Out-String | ?{$_} | Invoke-Expression")
 
     def do(self, command: str):
         self.p.stdin.write((command + "\n").encode())
@@ -237,9 +238,9 @@ try:
             print("Would you like to have this script install conda for you?")
             choice = promptForChoice("", "", (("Yes", "No")))
             if choice == 0:
-                subprocess.call(["C:\Windows\System32\cmd.exe", "curl", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe", "-o", "miniconda.exe"])
-                subprocess.call(["C:\Windows\System32\cmd.exe", "start", "/wait", "", ".\\miniconda.exe", "/S"])
-                subprocess.call(["C:\Windows\System32\cmd.exe", "del", "miniconda.exe"])
+                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "curl", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe", "-o", "miniconda.exe"])
+                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "start", "/wait", "", ".\\miniconda.exe", "/S"])
+                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "del", "miniconda.exe"])
                 print("Miniconda installed.")
         raise SkipErrorPrintException
     
