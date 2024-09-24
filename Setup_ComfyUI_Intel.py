@@ -13,6 +13,9 @@ import threading
 
 IS_WINDOWS = os.name == "nt"
 
+POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+CMD = "C:\\Windows\\System32\\cmd.exe"
+
 if IS_WINDOWS:
     def makeShortcut(filepath: str, target: str, args: str, iconpath: str, iconid: int):
         #$wsh = New-Object -comObject WScript.Shell
@@ -21,7 +24,7 @@ if IS_WINDOWS:
         #$sho_lowvram.Arguments = "/K `"${base_path}\${foldername}\${startfilename_lowvram}`""
         #$sho_lowvram.IconLocation = "shell32.dll,14"
         #$sho_lowvram.Save()
-        return subprocess.call(["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", 
+        return subprocess.call([POWERSHELL, 
                          f"$wsh = New-Object -comObject WScript.Shell; \
                          $sho_lowvram = $wsh.CreateShortcut(\"{filepath}\"); \
                          $sho_lowvram.TargetPath = \"{target}\"; \
@@ -38,11 +41,11 @@ class Conda:
     p = None
     print_thread = None
     def __init__(self, condapath: str):
-        self.p = subprocess.Popen(args=[], executable="C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        self.p = subprocess.Popen(args=[], executable=CMD,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = os.getcwd(), shell = False)
         self.print_thread = threading.Thread(target=print_stdout, args=(self.p,))
         self.print_thread.start()
-        self.do(f"(& \"{condapath}\\Scripts\\conda.exe\"" + " \"shell.powershell\" \"hook\") | Out-String | ?{$_} | Invoke-Expression")
+        self.do(f"\"{condapath}\\Scripts\\activate.bat\"")
 
     def do(self, command: str):
         self.p.stdin.write((command + "\n").encode())
@@ -58,7 +61,7 @@ def get_gpu() -> tuple[bool, str]:
     dgpu = True
     gpu_name = ""
     if IS_WINDOWS:
-        gpu_name = subprocess.check_output(["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "(Get-WmiObject Win32_VideoController).Name"])
+        gpu_name = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"])
         gpu_name = gpu_name.decode()
         ma = re.search(r"Intel\(R\) Arc\(TM\) ([A-C]\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
@@ -238,10 +241,13 @@ try:
             print("Would you like to have this script install conda for you?")
             choice = promptForChoice("", "", (("Yes", "No")))
             if choice == 0:
-                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "curl", "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe", "-o", "miniconda.exe"])
-                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "start", "/wait", "", ".\\miniconda.exe", "/S"])
-                subprocess.call(["C:\\Windows\\System32\\cmd.exe", "del", "miniconda.exe"])
-                print("Miniconda installed.")
+                print("Downloading...")
+                subprocess.call([CMD, "/C", "curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe"])
+                print("Installing...")
+                subprocess.call([CMD, "/C", "start /wait .\\miniconda.exe /S"])
+                print("Cleaning up...")
+                subprocess.call([CMD, "/C", "del miniconda.exe"])
+                print("Miniconda installed. Please run the script again.")
         raise SkipErrorPrintException
     
     
@@ -389,7 +395,7 @@ try:
         
         # Shortcut/s?
         if IS_WINDOWS:
-            retc = makeShortcut(f"{base_path}\\ComfyUI.lnk", "C:\\Windows\\System32\\cmd.exe", f"/K `\"{base_path}\\{FOLDERNAME}\\{start_lowvram_filename}`\"", "shell32.dll", 14)
+            retc = makeShortcut(f"{base_path}\\ComfyUI.lnk", {CMD}, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_lowvram_filename}`\"", "shell32.dll", 14)
             if retc != 0:
                 print("An error ocurred when creating shortcut.")
                 raise SkipErrorPrintException
