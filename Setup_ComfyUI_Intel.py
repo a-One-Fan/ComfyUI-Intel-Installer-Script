@@ -395,7 +395,7 @@ try:
         
         # Shortcut/s?
         if IS_WINDOWS:
-            retc = makeShortcut(f"{base_path}\\ComfyUI.lnk", {CMD}, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_lowvram_filename}`\"", "shell32.dll", 14)
+            retc = makeShortcut(f"{base_path}\\ComfyUI.lnk", CMD, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_lowvram_filename}`\"", "shell32.dll", 14)
             if retc != 0:
                 print("An error ocurred when creating shortcut.")
                 raise SkipErrorPrintException
