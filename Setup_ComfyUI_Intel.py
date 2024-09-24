@@ -36,15 +36,22 @@ def print_stdout(p):
     for line in iter(p.stdout.readline, b''):
         print(line.decode('utf-8'), end='')
 
+def print_stderr(p):
+    for line in iter(p.stderr.readline, b''):
+        print(line.decode('utf-8'), end='')
+
 #TODO better ctr+c/z/sigterm/sigkill handling?
 class Conda:
     p = None
     print_thread = None
+    print_err_thread = None
     def __init__(self, condapath: str):
         self.p = subprocess.Popen(args=[], executable=CMD,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = os.getcwd(), shell = False)
         self.print_thread = threading.Thread(target=print_stdout, args=(self.p,))
         self.print_thread.start()
+        self.print_err_thread = threading.Thread(target=print_stderr, args=(self.p,))
+        self.print_err_thread.start()
         self.do(f"\"{condapath}\\Scripts\\activate.bat\"")
 
     def do(self, command: str):
@@ -55,6 +62,7 @@ class Conda:
         self.p.stdin.close()
         self.p.wait()
         self.print_thread.join()
+        self.print_err_thread.join()
 
 def get_gpu() -> tuple[bool, str]:
     """Returns (is dedicated GPU, GPU name)"""
