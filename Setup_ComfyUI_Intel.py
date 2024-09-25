@@ -245,8 +245,12 @@ try:
     if (not os.path.isdir(condapath)):
         print("Conda not found. If you already have Conda installed, open this file with a text editor and put Conda's path in the \"quoted location\" on the first line.")
         print("You can download Conda from: https://docs.anaconda.com/miniconda/#latest-miniconda-installer-links")
+        printColored("Please make sure to install conda in a location that has no spaces.", "White")
         if IS_WINDOWS:
-            print("Would you like to have this script install conda for you?")
+            if (UserProfile.find(" ") != -1):
+                printColored("! Your Windows username has spaces.", "Red")
+                raise SkipErrorPrintException
+            print(f"Would you like to have this script install conda for you, in {UserProfile}?")
             choice = promptForChoice("", "", (("Yes", "No")))
             if choice == 0:
                 print("Downloading...")
@@ -258,6 +262,35 @@ try:
                 print("Miniconda installed. Please run the script again.")
         raise SkipErrorPrintException
     
+
+    conda_test_ver = ""
+    conda_test_exc = None
+    try:
+        subprocess.check_output([CMD, "/C", f"{condapath}\\Scripts\\activate.bat"], shell=True)
+        conda_test_ver = subprocess.check_output([CMD, "/C", f"{condapath}\\Scripts\\activate.bat & conda -V"], stderr=subprocess.STDOUT, shell=True)
+        conda_test_ver = conda_test_ver.decode()
+    except Exception as e:
+        conda_test_exc = e
+    
+    # Would conda have a version of the sort "conda 28.a7_big12.sub XXL"?
+    if((not re.match(r"conda [1-9].+", conda_test_ver)) or conda_test_exc):
+        print("\nCould not initialize conda.")
+        if(conda_test_exc):
+            print("Error when trying to activate it:")
+            print(conda_test_exc)
+            print("Please make sure that ", end="")
+            printColored(f"{condapath}\\Scripts\\activate.bat", "Cyan", False)
+            print(" works, exists, and has no spaces in its path.")
+            if(not os.path.exists(f"{condapath}\\Scripts\\activate.bat")):
+                printColored("It does not exist.", "Red")
+            if(f"{condapath}\\Scripts\\activate.bat".find(" ") != -1):
+                printColored("Its path has spaces.", "Red")
+        else:
+            print("Conda version looks strange:")
+            print(conda_test_ver)
+            print("\nShould look something like:")
+            print("conda 21.2.0")
+        raise SkipErrorPrintException
     
     try:
         o = subprocess.check_output(("git", "--version"))
