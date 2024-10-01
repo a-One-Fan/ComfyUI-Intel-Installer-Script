@@ -469,7 +469,7 @@ try:
             size: int
             """In MB"""
             dir: str
-            filename_override: int
+            filename_override: str
             def __init__(self, link, size, dir = "checkpoints", filename_override = ""):
                 self.link=link
                 self.size=size
@@ -480,11 +480,12 @@ try:
                 if self.filename_override:
                     return self.filename_override
                 else:
-                    m = re.search(r"\/([^\/]+)$", model.link)
+                    m = re.search(r"\/([^\/]+)$", self.link)
                     if (m):
                         return m[1]
                     else:
-                        raise f"Could not find filename for {model.link} ({model})"
+                        print(f"Could not find filename for {self.link} ({self})")
+                        raise SkipErrorPrintException
                 return ""
 
         class DownloadableCollection:
