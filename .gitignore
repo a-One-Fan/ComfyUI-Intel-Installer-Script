@@ -1,3 +1,7 @@
 
 /Comfy_Intel
 ComfyUI.lnk
+*.exe
+*.ilk
+*.obj
+*.pdb
