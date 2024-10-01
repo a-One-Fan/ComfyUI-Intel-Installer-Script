@@ -11,7 +11,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <set>
 #include <regex>
 #include <fstream>
 // #include <thread> // Dunno how to fork() on windows
@@ -25,7 +24,6 @@ using std::to_string;
 using std::regex;
 using std::pair;
 using std::vector;
-using std::set;
 using namespace std::string_literals; // For std::string literals, "blabla"s -> string (not char*) literal
 using std::regex_search;
 using std::smatch;
@@ -71,8 +69,9 @@ struct convertVecStr{
 
 template<typename t>
 int find(const vector<t>& v, const t& elem){
-    for(int i=0;i<v.size();i++){
-        if(elem == v[i]){
+    for(int i=0; i<v.size(); i++){
+        const t &el2 = v[i]; // Helps with error readability
+        if(el2 == elem){
             return i;
         }
     }
@@ -160,18 +159,18 @@ pair<bool, string> get_gpu() {
 }
 
 namespace COLORS{
-    auto DarkGreen = "\033[32m"s;
-    auto Cyan = "\033[36m"s;
-    auto White = "\033[37m"s;
-    auto Red = "\033[91m"s;
-    auto Green = "\033[92m"s;
-    auto Yellow = "\033[93m"s;
-    auto Default = "\033[0m"s;
+    const string DarkGreen = "\033[32m"s;
+    const string Cyan = "\033[36m"s;
+    const string White = "\033[37m"s;
+    const string Red = "\033[91m"s;
+    const string Green = "\033[92m"s;
+    const string Yellow = "\033[93m"s;
+    const string Default = "\033[0m"s;
 }
 
 const vector<string> COLORS_VEC = {COLORS::DarkGreen, COLORS::Cyan, COLORS::White, COLORS::Red, COLORS::Green, COLORS::Yellow, COLORS::Default};
 
-void printColored(string text, string color, bool newline = true){
+void printColored(const string &text, const string &color, bool newline = true){
     _ASSERT(find(COLORS_VEC, color) != -1);
     cout << color << text << COLORS::Default;
     if(newline){
@@ -179,19 +178,19 @@ void printColored(string text, string color, bool newline = true){
     }
 }
 
-void print(string text, string end="\n", bool flush=false){
+void print(const string &text, const string &end="\n", bool flush=false){
     cout << text << end;
     if(flush){
         cout << std::flush;
     }
 }
 
-string readShortcut(string path) {
+string readShortcut(const string &path) {
     // TODO: Implement me
     return "";
 }
 
-bool replaceTextInFile(string filepath, string orig, string newtext){
+bool replaceTextInFile(const string &filepath, const string &orig, const string &newtext){
     _ASSERT(newtext.find(orig) == string::npos);
 
     ifstream f_in(filepath);
@@ -223,26 +222,41 @@ string upper(const string& s){
         }
         res += c;
     }
+    return res;
 }
 
 struct PFCType{
     string Key;
     string Name;
     string Description;
-    PFCType(string _s){
+    PFCType(const string &_s){
         Name = _s;
         Description = _s;
         Key = _s[0];
     }
-    PFCType(string _Name, string _Description) {
+    PFCType(const string &_Name, const string &_Description){
         Name = _Name;
         Description = _Description;
         Key = Name[0];
     }
-    PFCType(string _Name, string _Description, string _Key){
+    PFCType(const string &_Name, const string &_Description, const string &_Key){
         Name = _Name;
         Description = _Description;
         Key = _Key;
+    }
+    PFCType(const vector<string> &v){
+        if(v.size() == 1){
+            Name = Description = v[0];
+            Key = v[0][0];
+        }else{
+            Name = v[0];
+            Description = v[1];
+            if(v.size() == 3){
+                Key = v[2];
+            }else{
+                Key = Name[0];
+            }
+        }
     }
 };
 
@@ -251,14 +265,14 @@ bool inrange(t val, t min, t max) {
     return t >= min && t <= max;
 }
 
-string input(string text){
+string input(const string &text=""s){
     cout << text;
     string res;
     getline(cin, res);
     return res;
 }
 
-vector<int> promptForChoice(string header, string text, vector<PFCType> choices, int def=0, bool multiple=false) {
+vector<int> promptForChoice(const string &header, const string &text, const vector<PFCType> &choices, int def=0, bool multiple=false){
     if (header != "") printColored(header, COLORS::White);
     if (text != "") print(text);
 
@@ -320,7 +334,7 @@ vector<int> promptForChoice(string header, string text, vector<PFCType> choices,
 /// @param pad_char Char to pad with.
 /// @param pad_left 0 = pad from right (   str), 1 = pad from right (str   )
 /// @return Padded string.
-string pad(string s, int pad_count, char pad_char=' ', bool pad_left=true){
+string pad(const string &s, int pad_count, char pad_char=' ', bool pad_left=true){
     int paddedlen = pad_count - s.size();
     if (paddedlen <= 0){
         return s;
@@ -365,7 +379,8 @@ vector<vector<string> > maprow(const vector<t>& v, vector<string> (*mapfunc)(con
     vector<vector<string> > res(v.size(), vector<string>());
     res[0] = row;
     for(int i=1; i<v.size(); i++){
-        row = mapfunc[v[i]];
+        const t &el = v[i]; // Helps with error readability
+        row = mapfunc(el);
         res[i] = row;
     }
     return res;
@@ -408,13 +423,18 @@ void clone_or_pull(string link){
 
 template<typename t>
 vector<t> removeDuplicates(const vector<t> &v){
-    vector<t> res;
-    set<t> s;
-    for(auto v_elem : v){
-        s.insert(v_elem);
-    }
-    for(auto s_elem : s){
-        res.push_back(s_elem);
+    vector<t> res; 
+    for(int i=0; i<v.size(); i++){ // Doing this via set breaks for types that can't operator<
+        bool found_dupli = false;
+        for(int j=0; j<res.size(); j++){
+            if(res[j] == v[i]){
+                found_dupli = true;
+                break;
+            }
+        }
+        if(!found_dupli){
+            res.push_back(v[i]);
+        }
     }
     return res;
 }
@@ -465,7 +485,7 @@ string getConda(){
                 throw skip_error_print;
             }
             print("Would you like to have this script install conda for you, in "s +UserProfile + "?"s);
-            int choice = promptForChoice("", "", {"Yes", "No"})[0];
+            int choice = promptForChoice("", "", {PFCType("Yes"), PFCType("No")})[0];
             if (choice == 0){
                 print("Downloading...");
                 executeCommand({CMD, "/C", "curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe"});
@@ -490,7 +510,6 @@ string getConda(){
     smatch sm;
     // Would conda have a version of the sort "conda 28.a7_big12.sub XXL"?
     if((!regex_search(conda_test_ver, sm, regex("conda [1-9].+"))) || conda_test_exc){
-
         print("\nCould not initialize conda.");
         if(conda_test_exc){
             print("Error when trying to activate it:");
@@ -513,11 +532,12 @@ string getConda(){
         throw skip_error_print;
     }
 
+    return condapath;
 }
 
 int main(int argc, char* argv[]) {
     try{
-        printColored("Script version: "s + VERSION, "DarkGreen");
+        printColored("Script version: "s + VERSION, COLORS::DarkGreen);
 
         auto[is_dgpu, gpu_name] = get_gpu();
         string base_path = current_path().generic_string();
@@ -538,8 +558,8 @@ int main(int argc, char* argv[]) {
         }
 
         vector<PFCType> choices = {
-            ("Set up ComfyUI", "Download ComfyUI and install dependencies and other things needed to run on Intel Arc"),
-            ("Download a model")
+            PFCType("Set up ComfyUI", "Download ComfyUI and install dependencies and other things needed to run on Intel Arc"),
+            PFCType("Download a model")
         };
 
         int chosen_install = promptForChoice("---", "What to do?", choices, 0)[0];
@@ -576,7 +596,7 @@ int main(int argc, char* argv[]) {
             print(",\nas well as containing 1 batch file - used to launch Comfy (with --lowvram),");
             print("and a shortcut to it outside the folder.");
             print("\nContinue?");
-            int c = promptForChoice("", "", {"Yes", "No"})[0];
+            int c = promptForChoice("", "", {PFCType("Yes"), PFCType("No")})[0];
             if(c == 1){ // I don't want syntactic diabetes
                 return 0;
             }
@@ -608,7 +628,7 @@ int main(int argc, char* argv[]) {
             print("Would you like to install all of the following custom nodes:\n");
             formatTable(custom_nodes_info, map_custom_node_row, {"Name", "Description"});
             print("\nNote: Some of these require additional models to function, which you can download using this script after installing.");
-            int chosen_custom_nodes = promptForChoice("", "", {"Yes", "No"}, 0)[0];
+            int chosen_custom_nodes = promptForChoice("", "", {PFCType("Yes"), PFCType("No")}, 0)[0];
         
             // Slightly more organized stuff
             if(!is_directory(FOLDERNAME)){
@@ -731,12 +751,12 @@ int main(int argc, char* argv[]) {
                     link(_link), size(_size), dir(_dir), filename_override(_filename_override)
                 {}
 
-                string get_filename(){
+                string get_filename() const {
                     if(filename_override != ""s){
                         return filename_override;
                     }else{
                         smatch sm;
-                        if(regex_search(link, sm, regex("\/([^\/]+)$"))){
+                        if(regex_search(link, sm, regex("\\/([^\\/]+)$"))){
                             return sm[1];
                         }else{
                             print("Could not find filename for {model.link} ({model})");
@@ -744,6 +764,10 @@ int main(int argc, char* argv[]) {
                         }
                     }
                     return "";
+                }
+
+                bool operator==(const DownloadableFile& other) const {
+                    return link==other.link && size==other.size && dir==other.dir && filename_override == other.filename_override;
                 }
             };
 
@@ -838,7 +862,7 @@ int main(int argc, char* argv[]) {
                 }
                 row[1] = size_str;
                 table.push_back(row);
-                choices.push_back({to_string(i+1), coll.name, to_string(i+1)});
+                choices.push_back(PFCType(to_string(i+1), coll.name, to_string(i+1)));
             }
             
             _formatTable(table, {"Name", "Size"});
@@ -872,7 +896,7 @@ int main(int argc, char* argv[]) {
             }
             if(models.size() > 1){
                 print("About to download "s + to_string(sum / 1000.0).substr(0, 4) + "GB, continue?"s);
-                int cont = promptForChoice("", "", {"Yes", "No"})[0];
+                int cont = promptForChoice("", "", {PFCType("Yes"), PFCType("No")})[0];
                 if (cont == 1){
                     return 0;
                 }
@@ -883,7 +907,7 @@ int main(int argc, char* argv[]) {
                 auto collection = collections[id];
                 if (collection.license != ""s){
                     int agree = promptForChoice("Please review and agree with the "s + collection.name + " model's license, which can be found at:"s, 
-                        collection.license + "\n(ctrl+left click a link to open in browser)"s, {"Agree", "Disagree"}, 0)[0];
+                        collection.license + "\n(ctrl+left click a link to open in browser)"s, {PFCType("Agree"), PFCType("Disagree")})[0];
                     if(agree != 0){
                         return 0;
                     }
@@ -925,7 +949,6 @@ int main(int argc, char* argv[]) {
         print("\nPress enter to continue...");
     }
 
-    string s;
-    getline(cin, s);
+    input();
     return 1;
 }
