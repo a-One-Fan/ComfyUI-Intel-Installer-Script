@@ -398,9 +398,10 @@ void downloadFile(string link, string filename){
 string getenv(const string& varname){
     char* char_str;
     char_str = std::getenv(varname.c_str());
-    string res(char_str);
-    delete[] char_str;
-    return res;
+    if(!char_str){
+        return ""s;
+    }
+    return string(char_str);
 }
 
 const char skip_error_print[] = "njhid798ABHIdbA&*dhb";
@@ -453,10 +454,10 @@ string getConda(){
     }catch(...){}
 
     // Autodetect conda
-    const string UserProfile = getenv("UserProfile");
+    const string UserProfile = getenv("UserProfile"s);
     if (!exists(condapath)){
-        const string Home = getenv("HOME");
-        const string ProgramData = getenv("ProgramData");
+        const string Home = getenv("HOME"s);
+        const string ProgramData = getenv("ProgramData"s);
 
         vector<string> conda_locs = {UserProfile + "\\miniconda3"s, UserProfile + "\\anaconda3"s, Home + "/anaconda3"s, Home + "/miniconda3"s};
 
@@ -546,7 +547,7 @@ int main(int argc, char* argv[]) {
         const string CENVNAME = "cenv"s;
         
         //Conda/git checks
-
+        print("Looking for conda...");
         string condapath = getConda();
         
         try{
