@@ -30,6 +30,8 @@
         "type_traits": "cpp",
         "variant": "cpp",
         "xlocnum": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "utility": "cpp",
+        "ostream": "cpp"
     }
 }

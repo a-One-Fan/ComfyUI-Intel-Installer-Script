@@ -1,10 +1,17 @@
 #ifdef _WIN32
 #include <process.h>
+#include <process.h>
 #define execv _execv
 #define execl _execl
-#define popen _popen
+    #include <process.h>
+#define execv _execv
+#define execl _execl
+    #define popen _popen
+    #define spawnv _spawnv
+    #define spawnvp _spawnvp
 #else
-#include <unistd.h>
+    #include <unistd.h>
+    // TODO: Wrap posix_spawn and posix_spawnp into spawnv and spawnvp
 #endif
 #include <stdio.h>
 #include <vector>
@@ -47,6 +54,7 @@ const string POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\power
 const string CMD = "C:\\Windows\\System32\\cmd.exe";
 const string VERSION = "0.0.6";
 
+/// @brief Converts a std::vector<string> into a char* vector (char**), with convenient construction and destruction. Access using member v.
 struct convertVecStr{
     char** v;
     convertVecStr(const vector<string>& _v){
@@ -79,12 +87,15 @@ int find(const vector<t>& v, const t& elem){
 }
 
 int executeCommand(const vector<string> &command){//, bool blocking=true){
-    //convertVecStr converted(command);
-    string folded;
-    for(int i=0; i<command.size(); i++){
-        folded += command[i] + " "s;
-    }
-    return system(folded.c_str());
+    // system() implementation, doesn't allow setting argv
+    //string folded;
+    //for(int i=0; i<command.size(); i++){
+    //    folded += command[i] + " "s;
+    //}
+    //return system(folded.c_str());
+
+    convertVecStr converted(command);
+    return spawnvp(_P_WAIT, converted.v[0], converted.v);
 }
 
 /// Always blocking
@@ -105,7 +116,6 @@ string executeCommandReadOutput(const vector<string> &command){
 }
 
 int makeShortcut(const string &filepath, const string &target, const string &args, const string &iconpath = "shell32.dll"s, int iconid = 14){
-
   //$wsh = New-Object -comObject WScript.Shell
   //$sho_lowvram = $wsh.CreateShortcut("${base_path}\ComfyUI (Flux).lnk")
   //$sho_lowvram.TargetPath = "C:\Windows\System32\cmd.exe"
@@ -113,28 +123,45 @@ int makeShortcut(const string &filepath, const string &target, const string &arg
   //$sho_lowvram.IconLocation = "shell32.dll,14"
   //$sho_lowvram.Save()
 
-  string command = "$wsh = New-Object -comObject WScript.Shell;\n"s +
-  "$sho_lowvram = $wsh.CreateShortcut(\""s + filepath + "\");\n"s +
-  "$sho_lowvram.TargetPath = \""s + target + "\";\n"s +
-  "$sho_lowvram.Arguments = \""s + args + "\";\n"s +
-  "$sho_lowvram.IconLocation = \""s + iconpath + ","s + to_string(iconid) + "\";\n"s +
-  "$sho_lowvram.Save();"s;
+  string command = "\"$wsh = New-Object -comObject WScript.Shell; "s +
+  "$sho_lowvram = $wsh.CreateShortcut(\""s + filepath + "\"); "s +
+  "$sho_lowvram.TargetPath = \'"s + target + "\'; "s +
+  "$sho_lowvram.Arguments = \'"s + args + "\';\n"s +
+  "$sho_lowvram.IconLocation = \'"s + iconpath + ","s + to_string(iconid) + "\'; "s +
+  "$sho_lowvram.Save();\""s;
 
-  return executeCommand(vector<string>{POWERSHELL, POWERSHELL, command});;
+  return executeCommand({POWERSHELL, "-noprofile", command});
+}
+
+string readShortcut(const string &filepath) {
+    //$wsh = New-Object -comObject WScript.Shell
+    //$conda_cmd_shortcut = $wsh.CreateShortcut("${Env:ProgramData}\Microsoft\Windows\Start Menu\Programs\Anaconda3 (64-bit)\Anaconda Prompt.lnk")
+    //$conda_cmd_shortcut.Arguments
+
+    string command = "\"$wsh = New-Object -comObject WScript.Shell; "s +
+    "$sho = $wsh.CreateShortcut(\'" + filepath + "\'); "s +
+    "Write-Host $sho.Arguments\""s; // Command must be in quotations with no newlines
+    
+    return executeCommandReadOutput({POWERSHELL, "-noprofile", command});
 }
 
 class Conda{
-    string buf;
+    vector<string> commands;
 public:
     Conda(const string &condapath) {
-      buf += "(& \""s + condapath + "\\Scripts\\conda.exe\" \"shell.powershell\" \"hook\") | Out-String | ?{$_} | Invoke-Expression\n";
+      //buf += "(& \""s + condapath + "\\Scripts\\conda.exe\" \"shell.powershell\" \"hook\") | Out-String | ?{$_} | Invoke-Expression\n";
+      commands = {CMD, "/C", condapath + "\\Scripts\\activate.bat"s};
       return;
     }
     void command(const string &text) {
-        buf += text + "\n";
+        commands.push_back(text);
     }
     void end() {
-
+        cout << "Executing:\n";
+        for(int i=0; i<commands.size(); i++){
+            cout << commands[i] << " | ";
+        }
+        executeCommand(commands);
     }
 };
 
@@ -142,7 +169,7 @@ pair<bool, string> get_gpu() {
     bool dgpu = true;
     string gpu_name = "";
     #ifdef _WIN32
-    string out = executeCommandReadOutput({POWERSHELL, " (Get-WmiObject Win32_VideoController).Name"});
+    string out = executeCommandReadOutput({POWERSHELL, "-noprofile", "(Get-WmiObject Win32_VideoController).Name"});
     auto r = regex("Intel\\(R\\) Arc\\(TM\\) ([A-C]\\d{2,5}[A-Z]{0,2})");
     smatch sm;
     if(regex_search(out, sm, r)){
@@ -183,11 +210,6 @@ void print(const string &text, const string &end="\n", bool flush=false){
     if(flush){
         cout << std::flush;
     }
-}
-
-string readShortcut(const string &path) {
-    // TODO: Implement me
-    return "";
 }
 
 bool replaceTextInFile(const string &filepath, const string &orig, const string &newtext){
@@ -329,12 +351,12 @@ vector<int> promptForChoice(const string &header, const string &text, const vect
 }
 
 /// @brief Pads a string to fit a certain size.
-/// @param s Input string.
+/// @param s String to be padded.
 /// @param pad_count Target size to fit.
 /// @param pad_char Char to pad with.
-/// @param pad_left 0 = pad from right (   str), 1 = pad from right (str   )
+/// @param pad_left 0 = pad on right (   str), 1 = pad on left (str   )
 /// @return Padded string.
-string pad(const string &s, int pad_count, char pad_char=' ', bool pad_left=true){
+string pad(string s, int pad_count, char pad_char=' ', bool pad_left=true){
     int paddedlen = pad_count - s.size();
     if (paddedlen <= 0){
         return s;
@@ -347,25 +369,30 @@ string pad(const string &s, int pad_count, char pad_char=' ', bool pad_left=true
     }
 }
 
-void _formatTable(const vector<vector<string> > &things, const vector<string> &names, int extra_pad=4, bool horizontalGap = true){
-    _ASSERT(things.size() == names.size());
+void formatTable(const vector<vector<string> > &things, const vector<string> &names, int extra_pad=4, bool horizontalGap = true){
+    _ASSERT(things[0].size() == names.size());
 
-    vector<int> longest_props(things.size(), 0);
+    vector<int> longest_props(names.size(), 0);
     for(int i=0;i<things.size();i++){
         for(int j=0; j<things[i].size(); j++){
-            longest_props[i] = max(longest_props[i], things[i][j].length());
+            longest_props[i] = max(longest_props[j], things[i][j].length());
         }
+    }
+    for(int i=0; i<names.size(); i++){
         longest_props[i] = max(longest_props[i], names[i].length());
     }
 
     for(int i=0; i<names.size(); i++){
-        print(pad(names[i], longest_props[i]+extra_pad), "");
+        print(pad(names[i], longest_props[i]+extra_pad), ""s);
     }
-    print(horizontalGap ? "" : "\n");
+    print(horizontalGap ? ""s : "\n"s);
 
     for(int i=0; i<things.size(); i++){
         for(int j=0; j<things[i].size(); j++){
-            print(pad(things[i][j], longest_props[i]+extra_pad), "");
+            print("Prepad 2: "s + to_string(longest_props[i]) + " @ "s + to_string(i));
+            string padded_text = pad(things[i][j], longest_props[i]+extra_pad);
+            print(things[i][j], ""s);
+            print("Len: "s + to_string(i) + " "s + to_string(j) + " "s + to_string(things[i][j].length()));
         }
         print("");
     }
@@ -373,26 +400,8 @@ void _formatTable(const vector<vector<string> > &things, const vector<string> &n
     return;
 }
 
-template<typename t>
-vector<vector<string> > maprow(const vector<t>& v, vector<string> (*mapfunc)(const t& elem)){
-    vector<string> row = mapfunc(v[0]);
-    vector<vector<string> > res(v.size(), vector<string>());
-    res[0] = row;
-    for(int i=1; i<v.size(); i++){
-        const t &el = v[i]; // Helps with error readability
-        row = mapfunc(el);
-        res[i] = row;
-    }
-    return res;
-}
-
-template<typename t>
-void formatTable(const vector<t>& objects, vector<string> (*mapfunc)(const t& elem), const vector<string> &names, int extra_pad=4, bool horizontalGap = true){
-    _formatTable(maprow(objects, mapfunc), names, extra_pad, horizontalGap);
-}
-
 void downloadFile(string link, string filename){
-    executeCommand({POWERSHELL, POWERSHELL, "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest "s + link + " -OutFile \""s + filename +"\""s});
+    executeCommand({POWERSHELL, "-noprofile", "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest "s + link + " -OutFile \""s + filename +"\""s});
 }
 
 string getenv(const string& varname){
@@ -536,8 +545,12 @@ string getConda(){
     return condapath;
 }
 
+//#define MAIN_TRYCATCH
+
 int main(int argc, char* argv[]) {
+    #ifdef MAIN_TRYCATCH
     try{
+    #endif
         printColored("Script version: "s + VERSION, COLORS::DarkGreen);
 
         auto[is_dgpu, gpu_name] = get_gpu();
@@ -580,13 +593,13 @@ int main(int argc, char* argv[]) {
             // Description of what is to be installed
             print("");
             printColored("A folder ", COLORS::Default, false);
-            printColored(FOLDERNAME, "Cyan", false); // Assert test
+            printColored(FOLDERNAME, COLORS::Cyan, false);
 
             if (!is_directory(FOLDERNAME)){
-                printColored(" containing ComfyUI and Conda environment \""s + CENVNAME + "\" will be created in "s, COLORS::Default, false);
-                printColored(base_path, "Cyan", false);
+                printColored(" containing ComfyUI and Conda environment \""s + CENVNAME + "\" will be created in"s, COLORS::Default);
+                printColored(base_path, COLORS::Cyan, false);
             }else{
-                string conda_text = is_directory("./"s + FOLDERNAME + "/"s + CENVNAME) ? "updated" : "created";
+                string conda_text = is_directory("./"s + FOLDERNAME + "/"s + CENVNAME) ? "updated"s : "created"s;
                 printColored(" exists, the contained ComfyUI will be updated and Conda environment \""s + CENVNAME + "\" {conda_text}"s, COLORS::Default, false);
             }
 
@@ -601,33 +614,34 @@ int main(int argc, char* argv[]) {
             if(c == 1){ // I don't want syntactic diabetes
                 return 0;
             }
-        
+
             struct custom_node{
                 string Name, Description, link;
-                custom_node(const string& _Name, const string& _Description, const string& _link){
-                    Name = _Name;
-                    Description = _Description;
-                    link = _link;
-                }
+                custom_node(const string& _Name, const string& _Description, const string& _link): 
+                    Name(_Name), Description(_Description), link(_link)
+                {}
             };
 
             vector<custom_node> custom_nodes_info = {
-                custom_node("GGUF",            "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM",  "https://github.com/city96/ComfyUI-GGUF"),
-                custom_node("BrushNet",        "More intelligent inpainting, and using any SD1.5/XL model",      "https://github.com/nullquant/ComfyUI-BrushNet"),
-                //custom_node("Impact Pack",     "Pack of nodes for object segmentation and dealing with masks",   "https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
-                custom_node("SUPIR",           "High quality upscaling for realistic images",                    "https://github.com/kijai/ComfyUI-SUPIR"),
-                custom_node("KJNodes",         "Various misc. nodes",                                            "https://github.com/kijai/ComfyUI-KJNodes"),
-                custom_node("rghtree",         "Optimized execution, progressbar and various misc. nodes",       "https://github.com/rgthree/rgthree-comfy"),
-                custom_node("ExtraModels",     "Allows running additional non-SD models (such as Pixart)",       "https://github.com/city96/ComfyUI_ExtraModels"),
-                custom_node("IPAdapter Plus",  "Image Prompts",                                                  "https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
-                custom_node("Controlnet aux",  "Additional Controlnet preprocessors",                            "https://github.com/Fannovel16/comfyui_controlnet_aux"),
-                custom_node("Tiled KSampler",  "KSampler for very large images",                                 "https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
-                //custom_node("Pysssss scripts", "Play sound node and other misc. nodes abd UI additions",         "https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
+                custom_node("GGUF"s,            "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM"s,  "https://github.com/city96/ComfyUI-GGUF"s),
+                custom_node("BrushNet"s,        "More intelligent inpainting, and using any SD1.5/XL model"s,      "https://github.com/nullquant/ComfyUI-BrushNet"s),
+                //custom_node("Impact Pack"s,     "Pack of nodes for object segmentation and dealing with masks"s,   "https://github.com/ltdrdata/ComfyUI-Impact-Pack"s),
+                custom_node("SUPIR"s,           "High quality upscaling for realistic images"s,                    "https://github.com/kijai/ComfyUI-SUPIR"s),
+                custom_node("KJNodes"s,         "Various misc. nodes"s,                                            "https://github.com/kijai/ComfyUI-KJNodes"s),
+                custom_node("rghtree"s,         "Optimized execution, progressbar and various misc. nodes"s,       "https://github.com/rgthree/rgthree-comfy"s),
+                custom_node("ExtraModels"s,     "Allows running additional non-SD models (such as Pixart)"s,       "https://github.com/city96/ComfyUI_ExtraModels"s),
+                custom_node("IPAdapter Plus"s,  "Image Prompts"s,                                                  "https://github.com/cubiq/ComfyUI_IPAdapter_plus"s),
+                custom_node("Controlnet aux"s,  "Additional Controlnet preprocessors"s,                            "https://github.com/Fannovel16/comfyui_controlnet_aux"s),
+                custom_node("Tiled KSampler"s,  "KSampler for very large images"s,                                 "https://github.com/BlenderNeko/ComfyUI_TiledKSampler"s),
+                //custom_node("Pysssss scripts"s, "Play sound node and other misc. nodes abd UI additions"s,         "https://github.com/pythongosssss/ComfyUI-Custom-Scripts"s),
             };
-            vector<string> (*map_custom_node_row)(const custom_node&) = [](auto cn){return vector<string>{cn.Name, cn.Description};};
+            vector<vector<string> > table_customnodes;
+            for(auto cn : custom_nodes_info){
+                table_customnodes.push_back({cn.Name, cn.Description});
+            }
             
             print("Would you like to install all of the following custom nodes:\n");
-            formatTable(custom_nodes_info, map_custom_node_row, {"Name", "Description"});
+            formatTable(table_customnodes, {"Name", "Description"});
             print("\nNote: Some of these require additional models to function, which you can download using this script after installing.");
             int chosen_custom_nodes = promptForChoice("", "", {PFCType("Yes"), PFCType("No")}, 0)[0];
         
@@ -866,7 +880,7 @@ int main(int argc, char* argv[]) {
                 choices.push_back(PFCType(to_string(i+1), coll.name, to_string(i+1)));
             }
             
-            _formatTable(table, {"Name", "Size"});
+            formatTable(table, {"Name", "Size"});
 
             print("\nAll Flux/Pixart models are downloaded piecemeal (separate VAE, FP8 T5, CLIP, UNET)");
             print("The VAE, T5 and CLIP can be used for all Flux models and account for 5.34GB.");
@@ -940,7 +954,7 @@ int main(int argc, char* argv[]) {
             string plural = ids.size() > 1 ? "s" : "";
             printColored("\n\nFinished downloading model"s + plural + ". Press enter to continue.\n"s, COLORS::Green);
         }
-    
+    #ifdef MAIN_TRYCATCH
     }catch(const std::exception& e){
         if (!strcmp(e.what(), skip_error_print) == 0){
             printColored("An error occurred:", COLORS::Red);
@@ -949,7 +963,7 @@ int main(int argc, char* argv[]) {
         //pdb.set_trace()
         print("\nPress enter to continue...");
     }
-
+    #endif
     input();
-    return 1;
+    return 0;
 }
