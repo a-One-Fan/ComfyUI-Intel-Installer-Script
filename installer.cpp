@@ -1,13 +1,13 @@
+
 #ifdef _WIN32
     #include <process.h>
-    #include <process.h>
-    #include <process.h>
     #define popen _popen
-    #define spawnv _spawnv
-    #define spawnvp _spawnvp
+    #define pclose _pclose
 #else
     #include <unistd.h>
-    // TODO: Wrap posix_spawn and posix_spawnp into spawnv and spawnvp
+    #include <cstring> // Some Windows header also includes cstring?
+    #include <sys/types.h>
+    #include <sys/wait.h>
 #endif
 #include <stdio.h>
 #include <vector>
@@ -16,9 +16,9 @@
 #include <vector>
 #include <regex>
 #include <fstream>
-// #include <thread> // Dunno how to fork() on windows
 #include <filesystem>
 #include <cstdlib> //getenv(), system()
+#include <cassert>
 
 #define max(a, b) a>b ? a : b
 
@@ -49,6 +49,14 @@ using std::filesystem::path;
 const string POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 const string CMD = "C:\\Windows\\System32\\cmd.exe";
 const string VERSION = "0.0.6";
+
+#ifdef _WIN32
+bool use_conda = true;
+const bool TORCH_NIGHTLY = false;
+#else
+bool use_conda = false;
+const bool TORCH_NIGHTLY = true;
+#endif
 
 /// @brief Converts a std::vector<string> into a char* vector (char**), with convenient construction and destruction. Access using member v.
 struct convertVecStr {
@@ -90,13 +98,25 @@ int find(const vector<t>& v, const t& elem) {
     return -1;
 }
 
-int executeCommand(const vector<string>& command) {//, bool blocking=true){
-    // system() implementation, doesn't allow setting argv
-    //string folded;
-    //for(int i=0; i<command.size(); i++){
-    //    folded += command[i] + " "s;
-    //}
-    //return system(folded.c_str());
+int spawnvp(char * path, char** argv){
+#ifdef _WIN32
+    return _spawnvp(_P_WAIT, path, argv);
+#else
+    pid_t pid = fork();
+    if(!pid){
+        execvp(path, argv);
+        exit(-1);
+    }
+    int status;
+    waitpid(pid, &status, WNOHANG);
+    if(WIFEXITED(status)){
+        return WEXITSTATUS(status);
+    }
+    return -1;
+#endif
+}
+
+int executeCommandArgv(const vector<string>& command) {
 
     cout << "\n";
     for (int i = 0; i < command.size(); i++) {
@@ -106,7 +126,7 @@ int executeCommand(const vector<string>& command) {//, bool blocking=true){
 
     convertVecStr converted(command);
     converted.set_doDelete(false); // ? Does spawnvp delete them automatically? Delete[]ing after spawnvp causes problems. MSDN says nothing about that.
-    int retcode = _spawnvp(_P_WAIT, converted.v[0], converted.v);
+    int retcode = spawnvp(converted.v[0], converted.v);
     return retcode;
 }
 
@@ -122,7 +142,7 @@ pair<string, int> executeCommandReadOutput2(const vector<string>& command) {
     while (fgets(buf, 256, pipe)) {
         res += buf;
     }
-    int retval = _pclose(pipe);
+    int retval = pclose(pipe);
     return { res, retval };
 }
 
@@ -130,7 +150,7 @@ string executeCommandReadOutput(const vector<string>& command) {
     return executeCommandReadOutput2(command).first;
 }
 
-int makeShortcut(const string& filepath, const string& target, const string& args, const string& iconpath = "shell32.dll"s, int iconid = 14) {
+int makeShortcutWindows(const string& filepath, const string& target, const string& args, const string& iconpath = "shell32.dll"s, int iconid = 14) {
     //$wsh = New-Object -comObject WScript.Shell
     //$sho_lowvram = $wsh.CreateShortcut("${base_path}\ComfyUI (Flux).lnk")
     //$sho_lowvram.TargetPath = "C:\Windows\System32\cmd.exe"
@@ -145,10 +165,10 @@ int makeShortcut(const string& filepath, const string& target, const string& arg
         "$sho_lowvram.IconLocation = \'"s + iconpath + ","s + to_string(iconid) + "\'; "s +
         "$sho_lowvram.Save();"s;
 
-    return executeCommand({ POWERSHELL, "-noprofile", command });
+    return executeCommandArgv({ POWERSHELL, "-noprofile", command });
 }
 
-string readShortcut(const string& filepath) {
+string readShortcutWindows(const string& filepath) {
     //$wsh = New-Object -comObject WScript.Shell
     //$conda_cmd_shortcut = $wsh.CreateShortcut("${Env:ProgramData}\Microsoft\Windows\Start Menu\Programs\Anaconda3 (64-bit)\Anaconda Prompt.lnk")
     //$conda_cmd_shortcut.Arguments
@@ -160,28 +180,59 @@ string readShortcut(const string& filepath) {
     return executeCommandReadOutput({ POWERSHELL, "-noprofile", command });
 }
 
-class Conda {
+/// @brief Wrapper for giving stdin commands to a python environment (conda or venv).
+class PythonEnvironment {
     FILE* pipe;
+    bool conda;
 public:
-    Conda(const string& condapath) {
+    /// @brief 
+    /// @param conda
+    /// @param envpath If conda, supply path to conda's folder to activate it (a folder that has /Scripts/activate.bat)
+    PythonEnvironment(bool conda, const string& envpath, const string& condapath="") {
         pipe = popen(CMD.c_str(), "wt");
+        if(conda){
+            command(condapath + "\\Scripts\\activate.bat");
+        }
+
+        if(conda){
+            if (!is_directory(envpath)) {
+                command("conda create -p \""s + envpath + "\" python=3.10 -y"s);
+            }
+            command("conda activate \""s + envpath + "\""s);
+            command("conda install pkg-config libuv -y"s);
+        }else{
+            if (!is_directory(envpath)) {
+                command("python3.10 -m venv \""s + envpath + "\" python=3.10 -y"s);
+            }
+            command("source " + envpath + "/bin/activate");
+        }
+    }
+    bool is_conda() {
+        return conda;
     }
     void command(const string& text) {
         fputs(text.c_str(), pipe);
         fputs("\n", pipe);
     }
     void end() {
-        _pclose(pipe);
+        pclose(pipe);
     }
 };
 
+/// @brief Gets GPU info.
+/// @return Returns whether the GPU is discrete, and the GPU name.
 pair<bool, string> get_gpu() {
     bool dgpu = true;
     string gpu_name = "";
-#ifdef _WIN32
-    string out = executeCommandReadOutput({ POWERSHELL, "-noprofile", "(Get-WmiObject Win32_VideoController).Name" });
     auto r = regex("Intel\\(R\\) Arc\\(TM\\) ([A-C]\\d{2,5}[A-Z]{0,2})");
     smatch sm;
+
+#ifdef _WIN32
+    string out = executeCommandReadOutput({ POWERSHELL, "-noprofile", "(Get-WmiObject Win32_VideoController).Name" });
+#else
+    string out = executeCommandReadOutput({ "clinfo" });
+#endif
+
     if (regex_search(out, sm, r)) {
         gpu_name = sm[0];
         dgpu = true;
@@ -189,8 +240,6 @@ pair<bool, string> get_gpu() {
         gpu_name = "Unknown Possibly Integrated GPU";
         dgpu = false;
     }
-#else
-#endif
 
     return { dgpu, gpu_name };
 }
@@ -222,7 +271,7 @@ void print(const string& text, const string& end = "\n", bool flush = false) {
 }
 
 bool replaceTextInFile(const string& filepath, const string& orig, const string& newtext) {
-    _ASSERT(newtext.find(orig) == string::npos);
+    assert(newtext.find(orig) == string::npos);
 
     if (!exists(filepath)) {
         printColored("File " + filepath + " does not exist!", COLORS::Red);
@@ -294,11 +343,6 @@ struct PFCType {
         }
     }
 };
-
-template<typename t>
-bool inrange(t val, t min, t max) {
-    return t >= min && t <= max;
-}
 
 string input(const string& text = ""s) {
     cout << text;
@@ -386,7 +430,7 @@ string pad(string s, int pad_count, char pad_char = ' ', bool pad_left = true) {
 }
 
 void formatTable(const vector<vector<string> >& things, const vector<string>& names, int extra_pad = 4, bool horizontalGap = true) {
-    _ASSERT(things[0].size() == names.size());
+    assert(things[0].size() == names.size());
 
     vector<int> longest_props(names.size(), 0);
     for (int i = 0; i < things.size(); i++) {
@@ -414,7 +458,11 @@ void formatTable(const vector<vector<string> >& things, const vector<string>& na
 }
 
 void downloadFile(string link, string filename) {
-    executeCommand({ POWERSHELL, "-noprofile", "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest \"\\\""s + link + "\\\"\" -OutFile \""s + filename + "\""s });
+#ifdef _WIN32
+    executeCommandArgv({ POWERSHELL, "-noprofile", "$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest \"\\\""s + link + "\\\"\" -OutFile \""s + filename + "\""s });
+#else
+    executeCommandArgv({ "wget"s, "-O"s, filename, link});
+#endif
 }
 
 string getenv(const string& varname) {
@@ -438,9 +486,9 @@ void clone_or_pull(const string& link, const string& cwd) {
     }
 
     if (!exists(cwd + "/" + folder)) {
-        executeCommand({ "git", "clone", link, cwd + "/" + folder });
+        executeCommandArgv({ "git", "clone", link, cwd + "/" + folder });
     } else {
-        executeCommand({ "git", "-C \""s + cwd + "\" pull"s});
+        executeCommandArgv({ "git", "-C \""s + cwd + "\" pull"s});
     }
 }
 
@@ -488,7 +536,7 @@ string getConda() {
         vector<string> conda_locs = { UserProfile + "\\miniconda3"s, UserProfile + "\\anaconda3"s, Home + "/anaconda3"s, Home + "/miniconda3"s };
 
         if (exists(ProgramData + "\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)")) {
-            string sh_args = readShortcut(ProgramData + "\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)\\Anaconda Prompt.lnk");
+            string sh_args = readShortcutWindows(ProgramData + "\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)\\Anaconda Prompt.lnk");
             smatch sm;
             if (regex_search(sh_args, sm, regex("([A-Z]:[\\w \\\\\\/]+)\\\\Scripts\\\\activate\\.bat"))) {
                 conda_locs.push_back(sm[1]);
@@ -515,11 +563,11 @@ string getConda() {
         int choice = promptForChoice("", "", { PFCType("Yes"), PFCType("No") })[0];
         if (choice == 0) {
             print("Downloading...");
-            executeCommand({ CMD, "/C", "curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe" });
+            executeCommandArgv({ CMD, "/C", "curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe" });
             print("Installing...");
-            executeCommand({ CMD, "/C", "start /wait .\\miniconda.exe /S" });
+            executeCommandArgv({ CMD, "/C", "start /wait .\\miniconda.exe /S" });
             print("Cleaning up...");
-            executeCommand({ CMD, "/C", "del miniconda.exe" });
+            executeCommandArgv({ CMD, "/C", "del miniconda.exe" });
             print("Miniconda installed. Please run the script again.");
         }
         throw skip_error_print;
@@ -571,19 +619,55 @@ int main(int argc, char* argv[]) {
         string base_path = current_path().generic_string();
         path cwd = current_path();
         const string FOLDERNAME = "Comfy_Intel"s;
-        const string CENVNAME = "cenv"s;
+        const string ENVNAME = use_conda ? "cenv"s : "venv"s;
+        const string ENVTYPE = use_conda ? "Conda" : "Venv";
 
-        //Conda/git checks
-        print("Looking for conda...");
-        string condapath = getConda();
+        string condapath = "";
+        if(use_conda){
+            print("Looking for Conda...");
+            condapath = getConda();
+        }
 
-        try {
-            string o = executeCommandReadOutput({ "git", "--version" });
-        } catch (...) {
+        pair<string, int> ecro2;
+        ecro2 = executeCommandReadOutput2({ "git", "--version" });
+        if(ecro2.second != 0){
             print("Git not found.");
+#ifdef _WIN32
             print("You can download Git from: https://git-scm.com/download/win");
+#endif
             throw skip_error_print;
         }
+
+#ifndef _WIN32
+        ecro2 = executeCommandReadOutput2({ "wget", "--version" });
+        if(ecro2.second != 0){
+            print("wget not found.");
+            throw skip_error_print;
+        }
+
+        ecro2 = executeCommandReadOutput2({ "clinfo" });
+        if(ecro2.second != 0){
+            print("clinfo not found.");
+            throw skip_error_print;
+        }
+
+        ecro2 = executeCommandReadOutput2({ "python3.10", "--version"});
+        if(ecro2.second != 0){
+            print("Python 3.10 not found.");
+            print("You may install it via:");
+            print("sudo add-apt-repository ppa:deadsnakes/ppa");
+            print("sudo apt update");
+            print("sudo apt install python3.10 python3.10-venv");
+            throw skip_error_print;
+        }else{
+            ecro2 = executeCommandReadOutput2({ "python3.10", "-m", "ensurepip"});
+            if(ecro2.second != 0){
+                print("Please install python3.10-venv:");
+                print("sudo apt install python3.10-venv");
+                throw skip_error_print;
+            }
+        }
+#endif
 
         vector<PFCType> choices = {
             PFCType("Set up ComfyUI", "Download ComfyUI and install dependencies and other things needed to run on Intel Arc"),
@@ -610,17 +694,22 @@ int main(int argc, char* argv[]) {
             printColored(FOLDERNAME, COLORS::Cyan, false);
 
             if (!is_directory(FOLDERNAME)) {
-                printColored(" containing ComfyUI and Conda environment \""s + CENVNAME + "\" will be created in"s, COLORS::Default);
+                printColored(" containing ComfyUI and " + ENVTYPE + " environment \""s + ENVNAME + "\" will be created in"s, COLORS::Default);
                 printColored(base_path, COLORS::Cyan, false);
             } else {
-                string conda_text = is_directory("./"s + FOLDERNAME + "/"s + CENVNAME) ? "updated"s : "created"s;
-                printColored(" exists, the contained ComfyUI will be updated and Conda environment \""s + CENVNAME + "\" " + conda_text, COLORS::Default, false);
+                string env_text = is_directory("./"s + FOLDERNAME + "/"s + ENVNAME) ? "updated"s : "created"s;
+                printColored(" exists, the contained ComfyUI will be updated and " + ENVTYPE + " environment \""s + ENVNAME + "\" " + env_text, COLORS::Default, false);
             }
 
             printColored(", \ninstalling IPEX for "s + gpu_text[0] + " "s, COLORS::Default, false);
             printColored(gpu_text[1], COLORS::Cyan, false);
-            printColored(" "s + gpu_text[2] + " and using Conda at ", COLORS::Default, false);
-            printColored(condapath, COLORS::Cyan, false);
+            printColored(" "s + gpu_text[2] + " and using ", COLORS::Default, false);
+            if(use_conda){
+                printColored("Conda at ", COLORS::Default, false);
+                printColored(condapath, COLORS::Cyan, false);
+            }else{
+                printColored("Venv", COLORS::Cyan, false);
+            }
             print(",\nas well as containing 1 batch file - used to launch Comfy (with --lowvram),");
             print("and a shortcut to it outside the folder.");
             print("\nContinue?");
@@ -670,19 +759,15 @@ int main(int argc, char* argv[]) {
             cwd /= "ComfyUI/comfy";
             clone_or_pull("https://github.com/comfyanonymous/ComfyUI", cwd);
             clone_or_pull("https://github.com/Disty0/ipex_to_cuda", cwd);
-            print("Not applying Disty's hijacks (temporarily!)");
-            //replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()")
+            //print("Not applying Disty's hijacks (temporarily!)");
+            print("Apply Disty's hijacks (thanks!)");
+            replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()");
             cwd = cwd.parent_path().parent_path();
 
             // Install dependencies
-            Conda conda(condapath);
-            string cenvpath = (cwd / CENVNAME).generic_string();
-            if (!is_directory(cenvpath)) {
-                conda.command("conda create -p \""s + cenvpath + "\" python=3.10 -y"s);
-            }
-            conda.command("conda activate \""s + cenvpath + "\""s);
-            conda.command("conda install pkg-config libuv -y"s);
-            conda.command("pip install -r \""s + (cwd / "ComfyUI" / "requirements.txt").generic_string() + "\""s);
+            string envpath = (cwd / ENVNAME).generic_string();
+            PythonEnvironment pe(use_conda, envpath, condapath);
+            pe.command("pip install -r \""s + (cwd / "ComfyUI" / "requirements.txt").generic_string() + "\""s);
 
             if (chosen_custom_nodes == 0) {
                 cwd /= "ComfyUI/custom_nodes";
@@ -698,7 +783,7 @@ int main(int argc, char* argv[]) {
                     clone_or_pull(cn.link, cwd);
                     string requirements_path = (cwd / folder / "requirements.txt").generic_string();
                     if (exists(requirements_path)) {
-                        conda.command("pip install -r \"" + requirements_path + "\"");
+                        pe.command("pip install -r \"" + requirements_path + "\"");
                     }
                 }
 
@@ -709,23 +794,27 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
             const string URL = is_dgpu ? "xpu"s : "mtl";
 
-            conda.command("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+            pe.command("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                     --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/"s + URL + "/us/");
 
-            conda.command("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1");
+            pe.command("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1");
 #else
-            conda.command("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                            oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/");
+            if(!TORCH_NIGHTLY){
+                pe.command("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                                oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/");
+            }else{
+                pe.command("python -m pip install --force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu");
+            }
 #endif
-            conda.command("pip install numpy==1.26.4");
-            conda.command("pip install onnxruntime-openvino");
+            pe.command("pip install numpy==1.26.4");
+            pe.command("pip install onnxruntime-openvino");
 
 
             // Create start script/s? Maybe 1 script + 1 shortcut only to not confuse people too much.
             const string _START_LOWVRAM_BASE_FILENAME = "start_lowvram";
 #ifdef _WIN32
             const string start_lowvram_filename = _START_LOWVRAM_BASE_FILENAME + ".bat"s;
-            const string start_lowvram_content = "call \"" + condapath + "\\Scripts\\activate.bat\" \ncd /D \"%~dp0\" \ncall conda activate ./"s + CENVNAME + " \ncd ./ComfyUI \npython ./main.py --bf16-unet --disable-ipex-optimize --lowvram";
+            const string start_lowvram_content = "call \"" + condapath + "\\Scripts\\activate.bat\" \ncd /D \"%~dp0\" \ncall conda activate ./"s + ENVNAME + " \ncd ./ComfyUI \npython ./main.py --bf16-unet --disable-ipex-optimize --lowvram";
 #else
             const string start_lowvram_filename = _START_LOWVRAM_BASE_FILENAME + ".sh"s;
             const string start_lowvram_content = "#!/bin/bash\n:("s;
@@ -738,7 +827,7 @@ int main(int argc, char* argv[]) {
 
             // Shortcut/s?
 #ifdef _WIN32
-            int retc = makeShortcut(base_path + "\\ComfyUI.lnk"s, "C:\\Windows\\System32\\cmd.exe", "/K \""s + base_path + "\\"s + FOLDERNAME + "\\"s + start_lowvram_filename + "\""s, "shell32.dll"s, 14);
+            int retc = makeShortcutWindows(base_path + "\\ComfyUI.lnk"s, "C:\\Windows\\System32\\cmd.exe", "/K \""s + base_path + "\\"s + FOLDERNAME + "\\"s + start_lowvram_filename + "\""s, "shell32.dll"s, 14);
             if (retc != 0) {
                 print("An error ocurred when creating shortcut (" + to_string(retc) + ").");
                 throw skip_error_print;
@@ -748,7 +837,7 @@ int main(int argc, char* argv[]) {
             print(".desktop file code here");
 #endif
 
-            conda.end();
+            pe.end();
             print(""); // TODO: Is flush needed here in C++?
 
             if (chosen_custom_nodes == 0) {
