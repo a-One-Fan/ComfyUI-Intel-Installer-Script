@@ -156,6 +156,8 @@ def promptForChoice(header: str, text: str, choices: list, default: int = 0, mul
         inp = input("")
         inp = inp.upper()
         if not multiple:
+            if inp == "":
+                return default
             for i, choice in enumerate(choices_mod):
                 if (inp == choice.Key):
                     return i
