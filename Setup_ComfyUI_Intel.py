@@ -110,7 +110,7 @@ def replaceTextInFile(filepath: str, orig: str, new: str):
     f = open(filepath, "r")
     file_string = ""
     for line in f:
-        file_string += line + "\n"
+        file_string += line
     f.close()
     loc = file_string.find(orig)
     if loc != -1:
