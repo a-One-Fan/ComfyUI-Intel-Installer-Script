@@ -383,8 +383,8 @@ try:
         clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
-        print("Not applying Disty's hijacks (temporarily!)")
-        #replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()")
+        #print("Not applying Disty's hijacks (temporarily!)")
+        replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()")
         os.chdir("../..")
         
         # Install dependencies
