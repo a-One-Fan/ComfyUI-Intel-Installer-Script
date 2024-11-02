@@ -384,7 +384,7 @@ try:
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
         #print("Not applying Disty's hijacks (temporarily!)")
-        replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()")
+        replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()\n")
         os.chdir("../..")
         
         # Install dependencies
@@ -504,8 +504,9 @@ try:
         ae =                DownloadableFile("https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors", 327, "vae")
         sdxl_vae_10 =       DownloadableFile("https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors", 359, "vae")
 
-        clip_tune_text =    DownloadableFile("https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors", 346)
-        clip_tune_smooth =  DownloadableFile("https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-BEST-smooth-GmP-TE-only-HF-format.safetensors", 346)
+        clip_tune_text =    DownloadableFile("https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors", 346, "clip")
+        clip_tune_smooth =  DownloadableFile("https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-BEST-smooth-GmP-TE-only-HF-format.safetensors", 346, "clip")
+        clip_g =            DownloadableFile("https://huggingface.co/Comfy-Org/stable-diffusion-3.5-fp8/resolve/main/text_encoders/clip_g.safetensors", 1457, "clip")
         
         fluxdev8b_u =       DownloadableFile("https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8-e4m3fn.safetensors", 11621, "unet")
         fluxschnell8b_u =   DownloadableFile("https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-schnell-fp8-e4m3fn.safetensors", 11621, "unet")
@@ -534,9 +535,14 @@ try:
 
         dreamshaper_8_ba =  DownloadableFile("https://civitai.com/api/download/models/128713?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008, filename_override="dreamshaper_8.safetensors")
         drmsh8r_8_inp_ba =  DownloadableFile("https://civitai.com/api/download/models/131004?type=Model&format=SafeTensor&size=pruned&fp=fp16", 2008, filename_override="dreamshaper_8_inpainting.safetensors")
+
+        sd35_8b_q8_ba =     DownloadableFile("https://huggingface.co/city96/stable-diffusion-3.5-large-gguf/resolve/main/sd3.5_large-Q8_0.gguf", 9206, "unet")
+        sd35_8b_q5_1_ba =   DownloadableFile("https://huggingface.co/city96/stable-diffusion-3.5-large-gguf/resolve/main/sd3.5_large-Q5_1.gguf", 6574, "unet")
         
         fluxdev4bit =       DownloadableCollection([ae, t5_8, clip_l, fluxdev4b_u], "Flux.1 Dev 4-bit", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
         fluxschnell4bit =   DownloadableCollection([ae, t5_8, clip_l, fluxschnell4b_u], "Flux.1 Schnell 4-bit")
+        sd358bit =          DownloadableCollection([clip_l, clip_g, t5_8, sd35_8b_q8_ba], "SD 3.5 Large 8-bit", "https://stability.ai/community-license-agreement")
+        sd355bit =          DownloadableCollection([clip_l, clip_g, t5_8, sd35_8b_q5_1_ba], "SD 3.5 Large 5-bit", "https://stability.ai/community-license-agreement")
         supir =             DownloadableCollection([supir_f, supir_q], "SUPIR")
         powerpaint =        DownloadableCollection([powerpaint_1, powerpaint_2], "PowerPaint (better Brushnet, SD1.5)")
         brushnet_15 =       DownloadableCollection([brushnet_15_ran, brushnet_15_seg], "Brushnet (SD1.5)")
