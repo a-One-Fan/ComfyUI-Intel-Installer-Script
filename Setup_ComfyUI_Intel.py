@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.0.5"
+version = "0.0.6p"
 
 import os
 import re
@@ -211,6 +211,7 @@ def clone_or_pull(link: str):
     if not os.path.isdir(folder):
         subprocess.call(f"git clone {link}")
     else:
+        subprocess.call("git restore .", cwd=os.getcwd()+f"/{folder}")
         subprocess.call("git pull", cwd=os.getcwd()+f"/{folder}")
 
 class SkipErrorPrintException(Exception):
@@ -319,6 +320,15 @@ try:
         #    print("Please delete it.")
         #    raise SkipErrorPrintException
 
+        ipex_choices = (
+            ("2.5.1", "Slower than 2.3, better compatibility (e.g. Stable Cascade works)", "0"),
+            ("2.3.110", "Faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
+            ("2.1.40", "Legacy version", "2")
+        )
+
+        chosen_ipex = "1"#promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 1)
+        chosen_ipex = int(chosen_ipex)
+
         if is_dgpu:
             gpu_text = ["a", "discrete", gpu_name]
         else:
@@ -335,9 +345,11 @@ try:
             conda_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{CENVNAME}") else "created"
             printColored(f" exists, the contained ComfyUI will be updated and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
 
-        printColored(f", \ninstalling IPEX for {gpu_text[0]} ", "Default", False)
+        printColored(", \ninstalling Pytorch/IPEX ", "Default", False)
+        printColored(ipex_choices[chosen_ipex][0], "Cyan", False)
+        printColored(f" for {gpu_text[0]} ", "Default", False)
         printColored(gpu_text[1], "Cyan", False)
-        printColored(f" {gpu_text[2]} and using Conda at ", "Default", False)
+        printColored(f" {gpu_text[2]},\nand using Conda at ", "Default", False)
         printColored(os.path.join(condapath, ''), "Cyan", False)
         print(",\nas well as containing 1 batch file - used to launch Comfy (with --lowvram),")
         print("and a shortcut to it outside the folder.")
@@ -383,8 +395,19 @@ try:
         clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
-        #print("Not applying Disty's hijacks (temporarily!)")
-        replaceTextInFile("model_management.py", "as ipex\n", "as ipex#\n    from ipex_to_cuda import ipex_init\n    ipex_init()\n")
+        print("Applying Disty's hijacks (thanks!)")
+        if(chosen_ipex == 0):
+            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", "from ipex_to_cuda import ipex_init\n    ipex_init()\n    import intel_extension_for_pytorch as ipex#\n")
+        else:
+            BIG_CODE = """import transformers # ipex hijacks transformers and makes it unable to load a model
+    backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
+    import intel_extension_for_pytorch as ipex#
+    ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
+    transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
+    from ipex_to_cuda import ipex_init
+    ipex_init()
+"""
+            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", BIG_CODE)
         os.chdir("../..")
         
         # Install dependencies
@@ -410,10 +433,18 @@ try:
         if IS_WINDOWS:
             url = "xpu" if is_dgpu else "mtl"
 
-            conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                    --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
+            if chosen_ipex == 0:
+                conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
+                conda.do("pip install dpcpp-cpp-rt==2025.0.0 mkl-dpcpp==2025.0.0 onednn==2025.0.0") #! This is apparently not enough to get it to work without the basekit
+            elif chosen_ipex == 1: 
+                conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
 
-            conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+            else:
+                conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
+                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
+                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
         else:
             conda.do("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                               oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
