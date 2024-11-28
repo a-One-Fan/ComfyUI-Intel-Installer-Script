@@ -6,3 +6,4 @@ ComfyUI.lnk
 *.obj
 *.pdb
 installer
+*.yaml
