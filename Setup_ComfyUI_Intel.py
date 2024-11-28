@@ -64,25 +64,31 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
-def get_gpu() -> tuple[bool, str]:
-    """Returns (is dedicated GPU, GPU name)"""
-    dgpu = True
+GPU_URLS = ["xpu", "mtl", "lnl"]
+GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake"]
+GPU_A_AN = ["a", "an", "an"]
+
+def get_gpu() -> tuple[int, str]:
+    """Returns (GPU id in GPU_URLS, short GPU name, full GPU name)"""
+
     gpu_name = ""
     if IS_WINDOWS:
         gpu_name = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"])
         gpu_name = gpu_name.decode()
-        ma = re.search(r"Intel\(R\) Arc\(TM\) ([A-C]\d{2,5}[A-Z]{0,2})", gpu_name)
+
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
-            gpu_name = ma[0]
-            dgpu = True
-        else:
-            gpu_name = "Unknown Possibly Integrated GPU"
-            dgpu = False
-    else:
-        #TODO: Implement me
-        gpu_name = "Not implemented"
-    
-    return (dgpu, gpu_name)
+            return 0, ma[1], gpu_name
+        
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name)
+        if ma:
+            return 2, ma[1], gpu_name
+        
+        ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name)
+        if ma:
+            return 1, "GPU", gpu_name
+        
+    return -1, "Unknown GPU", gpu_name
 
 COLORS = {
     "DarkGreen": "\033[32m",
@@ -220,7 +226,7 @@ class SkipErrorPrintException(Exception):
 try:
     printColored(f"Script version: {version}", "DarkGreen")
 
-    is_dgpu, gpu_name = get_gpu()
+    gpu_id, gpu_short_name, gpu_full_name = get_gpu()
     base_path = os.getcwd()
     FOLDERNAME = "Comfy_Intel"
     CENVNAME = "cenv"
@@ -228,6 +234,11 @@ try:
     UserProfile = os.environ.get("UserProfile", "")
     AppData = os.environ.get("AppData", "")
     Home = os.environ.get("HOME", "")
+
+    if gpu_id == -1:
+        print(f"Unknown or potentially incorrectly detected GPU:\n{gpu_full_name}")
+        print("Please report this issue.")
+        raise SkipErrorPrintException
 
     # Autodetect conda
     if (not os.path.isdir(condapath)):
@@ -329,17 +340,14 @@ try:
         chosen_ipex = "1"#promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 1)
         chosen_ipex = int(chosen_ipex)
 
-        if is_dgpu:
-            gpu_text = ["a", "discrete", gpu_name]
-        else:
-            gpu_text = ["an", "integrated", gpu_name]
+        gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
         # Description of what is to be installed
         print("")
         printColored("A folder ", "Default", False)
         printColored(FOLDERNAME, "Cyan", False)
 
         if not os.path.isdir(FOLDERNAME):
-            printColored(f" containing ComfyUI and Conda environment \"{CENVNAME}\" will be created in ", "Default", False)
+            printColored(f" containing ComfyUI and Conda environment \"{CENVNAME}\" will be created in ", "Default")
             printColored(base_path, "Cyan", False)
         else:
             conda_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{CENVNAME}") else "created"
@@ -431,7 +439,7 @@ try:
             os.chdir("../..")
 
         if IS_WINDOWS:
-            url = "xpu" if is_dgpu else "mtl"
+            url = GPU_URLS[gpu_id]
 
             if chosen_ipex == 0:
                 conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
