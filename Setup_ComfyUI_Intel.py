@@ -90,6 +90,9 @@ def get_gpu() -> tuple[int, str]:
         
     return -1, "Unknown GPU", gpu_name
 
+def gpu_needs_slice(id: int) -> bool:
+    return id == 1
+
 COLORS = {
     "DarkGreen": "\033[32m",
     "Cyan": "\033[36m",
@@ -465,7 +468,18 @@ try:
         START_FILENAME_LOWVRAM=f"start_lowvram"
         if IS_WINDOWS:
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
-            start_lowvram_content = f"call \"{condapath}\\Scripts\\activate.bat\" \ncd /D \"%~dp0\" \ncall conda activate ./{CENVNAME} \ncd ./ComfyUI \npython ./main.py --bf16-unet --disable-ipex-optimize --lowvram"
+            slicing = ""
+            if gpu_needs_slice(gpu_id):
+                slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
+            else:
+                slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
+            start_lowvram_content = f"""
+call \"{condapath}\\Scripts\\activate.bat\"
+cd /D \"%~dp0\"
+call conda activate ./{CENVNAME}
+cd ./ComfyUI
+{slicing}
+python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         else:
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".sh"
             start_lowvram_content = f"#!/bin/bash\n:("
