@@ -15,6 +15,33 @@ IS_WINDOWS = os.name == "nt"
 
 POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 CMD = "C:\\Windows\\System32\\cmd.exe"
+SHELL = "/bin/bash"
+
+def CONDA_ACTIVATE(condapath):
+    if IS_WINDOWS:
+        return condapath + "\\Scripts\\activate.bat"
+    else:
+        return condapath + "/bin/conda shell.bash hook 1> /dev/null" # Normally this redirects stderr (2) but for some reason stuff goes into stdout instead?
+
+def CONDA_USER_PRINTABLE_PATH(condapath):
+    if IS_WINDOWS:
+        return condapath + "\\Scripts\\activate.bat"
+    else:
+        return condapath + "/bin/conda"
+    
+def LINUX_CONDA_SPAM(condapath):
+    return f"""__conda_setup="$('{condapath}/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "{condapath}/etc/profile.d/conda.sh" ]; then
+        . "{condapath}/etc/profile.d/conda.sh"
+    else
+        export PATH="{condapath}/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+"""
 
 if IS_WINDOWS:
     def makeShortcut(filepath: str, target: str, args: str, iconpath: str, iconid: int):
@@ -31,6 +58,24 @@ if IS_WINDOWS:
                          $sho_lowvram.Arguments = \"{args}\"; \
                          $sho_lowvram.IconLocation = \"{iconpath},{iconid}\"; \
                          $sho_lowvram.Save();"])
+else:
+    def makeShortcut(filepath: str, target: str, args: str, iconpath: str):
+        f = open(filepath, 'w')
+        f.write(f"""[Desktop Entry]
+Categories=Graphics;
+Comment[en_US]=ComfyUI
+Comment=ComfyUI
+Exec={target} {args}
+GenericName[en_US]=
+GenericName=
+Keywords=ai
+Icon={iconpath}
+Name[en_US]=ComfyUI
+Name=ComfyUI
+Terminal=true
+TerminalOptions=
+Type=Application
+""")
 
 def print_stdout(p):
     for line in iter(p.stdout.readline, b''):
@@ -46,15 +91,22 @@ class Conda:
     print_thread = None
     print_err_thread = None
     def __init__(self, condapath: str):
-        self.p = subprocess.Popen(args=[], executable=CMD,
+        interpreter = CMD if IS_WINDOWS else SHELL
+        self.p = subprocess.Popen(args=[], executable=interpreter,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd = os.getcwd(), shell = False)
         self.print_thread = threading.Thread(target=print_stdout, args=(self.p,))
         self.print_thread.start()
         self.print_err_thread = threading.Thread(target=print_stderr, args=(self.p,))
         self.print_err_thread.start()
-        self.do(f"\"{condapath}\\Scripts\\activate.bat\"")
+        self.do(f"{CONDA_ACTIVATE(condapath)}")
+        if(not IS_WINDOWS):
+            conda_init = LINUX_CONDA_SPAM(condapath)
+            self.do(conda_init)
+            self.do("conda init bash")
 
     def do(self, command: str):
+        self.p.stdin.write(("echo " + command + "\n").encode())
+        self.p.stdin.flush()
         self.p.stdin.write((command + "\n").encode())
         self.p.stdin.flush()
         
@@ -73,17 +125,29 @@ def get_gpu() -> tuple[int, str]:
 
     gpu_name = ""
     if IS_WINDOWS:
-        gpu_name = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"])
-        gpu_name = gpu_name.decode()
+        videocontroller = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"]).decode()
+        gpu_names = [videocontroller]
+        # TODO: Multi-gpu?
+    else:
+        clinfo = subprocess.check_output([SHELL, "-c", "clinfo --raw | grep CL_DEVICE_NAME"]).decode()[:-1]
+        gpu_names = []
+        for ln in clinfo.split("\n"):
+            s = ln.split()
+            if len(s) < 3:
+                continue
+            gpu_names.append(' '.join(s[2:]))
 
+    for gpu_name in gpu_names:
         ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
             return 0, ma[1], gpu_name
-        
+    
+    for gpu_name in gpu_names:
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name)
         if ma:
             return 2, ma[1], gpu_name
-        
+    
+    for gpu_name in gpu_names:
         ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name)
         if ma:
             return 1, "GPU", gpu_name
@@ -218,36 +282,29 @@ def downloadFile(link: str, filename: str):
 def clone_or_pull(link: str):
     folder = re.search(r"\/([^\/]+)$", link)[1]
     if not os.path.isdir(folder):
-        subprocess.call(f"git clone {link}")
+        subprocess.call(("git", "clone", link))
     else:
-        subprocess.call("git restore .", cwd=os.getcwd()+f"/{folder}")
-        subprocess.call("git pull", cwd=os.getcwd()+f"/{folder}")
+        subprocess.call(("git", "restore", "."), cwd=os.getcwd()+f"/{folder}")
+        subprocess.call(("git", "pull"), cwd=os.getcwd()+f"/{folder}")
 
-class SkipErrorPrintException(Exception):
-    pass
+def getConda():
+    global condapath
 
-try:
-    printColored(f"Script version: {version}", "DarkGreen")
-
-    gpu_id, gpu_short_name, gpu_full_name = get_gpu()
-    base_path = os.getcwd()
-    FOLDERNAME = "Comfy_Intel"
-    CENVNAME = "cenv"
-    
-    UserProfile = os.environ.get("UserProfile", "")
-    AppData = os.environ.get("AppData", "")
-    Home = os.environ.get("HOME", "")
-
-    if gpu_id == -1:
-        print(f"Unknown or potentially incorrectly detected GPU:\n{gpu_full_name}")
-        print("Please report this issue.")
-        raise SkipErrorPrintException
+    if IS_WINDOWS:
+        UserProfile = os.environ.get("UserProfile", "")
+        AppData = os.environ.get("AppData", "")
+    else:
+        Home = os.environ.get("HOME", "")
 
     # Autodetect conda
     if (not os.path.isdir(condapath)):
-        conda_locs = [f"{UserProfile}\\miniconda3", f"{UserProfile}\\anaconda3", f"{Home}/anaconda3", f"{Home}/miniconda3"]
+        if IS_WINDOWS:
+            conda_locs = [f"{UserProfile}\\miniconda3", f"{UserProfile}\\anaconda3"]
+        else:
+            conda_locs = [f"{Home}/anaconda3", f"{Home}/miniconda3"]
+        
 
-        if os.path.isdir(f"{AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)"):
+        if IS_WINDOWS and os.path.isdir(f"{AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)"):
             sh_args = readShortcut(f"{AppData}\\Microsoft\\Windows\\Start Menu\\Programs\\Anaconda3 (64-bit)\\Anaconda Prompt.lnk")
             condapath_re = re.search(r"([A-Z]:[\w \\\/]+)\\Scripts\\activate\.bat", sh_args)
             if condapath_re:
@@ -258,7 +315,7 @@ try:
                 condapath = loc
                 break
     
-    # Missing Conda/Git warnings 
+    # Missing Conda warnings 
     if (not os.path.isdir(condapath)):
         print("Conda not found. If you already have Conda installed, open this file with a text editor and put Conda's path in the \"quoted location\" on the first line.")
         print("You can download Conda from: https://docs.anaconda.com/miniconda/#latest-miniconda-installer-links")
@@ -279,13 +336,17 @@ try:
                 print("Miniconda installed. Please run the script again.")
         raise SkipErrorPrintException
     
-
+    # Conda version check
     conda_test_ver = ""
     conda_test_exc = None
     try:
-        subprocess.check_output([CMD, "/C", f"{condapath}\\Scripts\\activate.bat"], shell=True)
-        conda_test_ver = subprocess.check_output([CMD, "/C", f"{condapath}\\Scripts\\activate.bat & conda -V"], stderr=subprocess.STDOUT, shell=True)
-        conda_test_ver = conda_test_ver.decode()
+        if IS_WINDOWS:
+            subprocess.check_output([CMD, "/C", f"{CONDA_ACTIVATE(condapath)}"], shell=True)
+            conda_test_ver = subprocess.check_output([CMD, "/C", f"{CONDA_ACTIVATE(condapath)} & conda -V"], 
+                                                    stderr=subprocess.STDOUT, shell=True).decode()
+        else:
+            subprocess.check_output([SHELL, "-c", f"{CONDA_ACTIVATE(condapath)}"])
+            conda_test_ver = subprocess.check_output([SHELL, "-c", f"{CONDA_ACTIVATE(condapath)}; conda -V"]).decode()[:-1]
     except Exception as e:
         conda_test_exc = e
     
@@ -296,11 +357,13 @@ try:
             print("Error when trying to activate it:")
             print(conda_test_exc)
             print("Please make sure that ", end="")
-            printColored(f"{condapath}\\Scripts\\activate.bat", "Cyan", False)
+            printColored(CONDA_USER_PRINTABLE_PATH(condapath), "Cyan", False)
             print(" works, exists, and has no spaces in its path.")
-            if(not os.path.exists(f"{condapath}\\Scripts\\activate.bat")):
+
+            if(not os.path.exists(CONDA_USER_PRINTABLE_PATH(condapath))):
                 printColored("It does not exist.", "Red")
-            if(f"{condapath}\\Scripts\\activate.bat".find(" ") != -1):
+
+            if(condapath.find(" ") != -1):
                 printColored("Its path has spaces.", "Red")
         else:
             print("Conda version looks strange:")
@@ -308,12 +371,45 @@ try:
             print("\nShould look something like:")
             print("conda 21.2.0")
         raise SkipErrorPrintException
+
+    return condapath
+
+class SkipErrorPrintException(Exception):
+    pass
+
+try:
+    printColored(f"Script version: {version}", "DarkGreen")
+
+    # clinfo
+    if not IS_WINDOWS:
+        try:
+            subprocess.check_output([SHELL, "-c", "clinfo --raw"])
+        except:
+            print("clinfo is not installed. Please install clinfo (and potentially other important missing things).")
+            raise SkipErrorPrintException
+
+    gpu_id, gpu_short_name, gpu_full_name = get_gpu()
+    base_path = os.getcwd()
+    FOLDERNAME = "Comfy_Intel"
+    CENVNAME = "cenv"
+
+    # Unknown GPU
+    if gpu_id == -1:
+        print(f"Unknown or potentially incorrectly detected GPU:\n{gpu_full_name}")
+        print("Please report this issue.")
+        raise SkipErrorPrintException
     
+    condapath = getConda()
+
+    # Git check
     try:
         o = subprocess.check_output(("git", "--version"))
     except:
         print("Git not found.")
-        print("You can download Git from: https://git-scm.com/download/win")
+        if IS_WINDOWS:
+            print("You can download Git from: https://git-scm.com/download/win")
+        else:
+            print("Please install git.") # Linux without git???
         raise SkipErrorPrintException
 
     choices = (
@@ -335,7 +431,7 @@ try:
         #    raise SkipErrorPrintException
 
         ipex_choices = (
-            ("2.5.1", "Slower than 2.3, better compatibility (e.g. Stable Cascade works)", "0"),
+            ("2.6 nightly", "Slower than 2.3, better compatibility (e.g. Stable Cascade works)", "0"),
             ("2.3.110", "Faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
             ("2.1.40", "Legacy version", "2")
         )
@@ -362,7 +458,8 @@ try:
         printColored(gpu_text[1], "Cyan", False)
         printColored(f" {gpu_text[2]},\nand using Conda at ", "Default", False)
         printColored(os.path.join(condapath, ''), "Cyan", False)
-        print(",\nas well as containing 1 batch file - used to launch Comfy (with --lowvram),")
+        scripttype = "batch" if IS_WINDOWS else "shell"
+        print(f",\nas well as containing 1 {scripttype} script - used to launch ComfyUI (with --lowvram),")
         print("and a shortcut to it outside the folder.")
         print("\nContinue?")
         c = promptForChoice("", "", ("Yes", "No"))
@@ -447,15 +544,19 @@ try:
             if chosen_ipex == 0:
                 conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
                 conda.do("pip install dpcpp-cpp-rt==2025.0.0 mkl-dpcpp==2025.0.0 onednn==2025.0.0") #! This is apparently not enough to get it to work without the basekit
-            elif chosen_ipex == 1: 
-                conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
+            elif chosen_ipex == 1:
+                if IS_WINDOWS:
+                    conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
 
-                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+                    conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+                else:
+                    conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
             else:
                 conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
                          --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
                 conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+                #TODO: Linux 2.1.40?
         else:
             conda.do("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                               oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
@@ -468,22 +569,37 @@ try:
         START_FILENAME_LOWVRAM=f"start_lowvram"
         if IS_WINDOWS:
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
-            slicing = ""
             if gpu_needs_slice(gpu_id):
                 slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
             else:
                 slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
-            start_lowvram_content = f"""
-call \"{condapath}\\Scripts\\activate.bat\"
+            start_lowvram_content = f"""call \"{CONDA_ACTIVATE(condapath)}\"
 cd /D \"%~dp0\"
 call conda activate ./{CENVNAME}
 cd ./ComfyUI
 {slicing}
 python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         else:
+
+            if gpu_needs_slice(gpu_id):
+                slicing = f"export IPEX_FORCE_ATTENTION_SLICE=1\n# {GPU_URLS[gpu_id]} needs forced slicing" 
+            else:
+                slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
+            if chosen_ipex == 1:
+                environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
+            else:
+                environment_needed = f"# implement me :( - ipex {ipex_choices[chosen_ipex][0]}" #TODO
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".sh"
-            start_lowvram_content = f"#!/bin/bash\n:("
-            #TODO: Implement me
+            start_lowvram_content = f"""#!/bin/bash
+cd $(dirname $\u007bBASH_SOURCE[0]\u007d)
+{LINUX_CONDA_SPAM(condapath)}
+conda init
+conda activate ./{CENVNAME}
+cd ./ComfyUI
+{environment_needed}
+{slicing}
+python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
+#$SHELL""" # ? Is this more desirable?
         f = open(start_lowvram_filename, 'w')
         f.write(start_lowvram_content)
         f.close()
@@ -496,20 +612,21 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
                 print("An error ocurred when creating shortcut.")
                 raise SkipErrorPrintException
         else:
-            #TODO: Implement me
-            print(".desktop file code here")
+            makeShortcut(f"{base_path}/ComfyUI.desktop", f"{base_path}/{FOLDERNAME}/{start_lowvram_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
 
         conda.end()
         print("", flush=True)
 
         if (chosen_custom_nodes == 0):
             print("Applying SUPIR fixes...")
-            replaceTextInFile("./cenv/lib/site-packages/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
+            site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
+            replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             print("Done.")
 
-
-        printColored("\n\nComfyUI is set up. Press enter to continue.\n", "Green")
+        if (not IS_WINDOWS):
+            printColored(f"\nYou may need to chmod 0777 the start script Comfy_Intel/{start_lowvram_filename} !", "Yellow")
+        printColored("\nComfyUI is set up. Press enter to continue.\n", "Green")
     elif(chosen_install == 1):
         ##################################
         #        Download a model        #
