@@ -116,9 +116,9 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
-GPU_URLS = ["xpu", "mtl", "lnl"]
-GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake"]
-GPU_A_AN = ["a", "an", "an"]
+GPU_URLS = ["xpu", "mtl", "lnl", "xpu"]
+GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage (potentially not working yet)"]
+GPU_A_AN = ["a", "an", "an", "a"]
 
 def get_gpu() -> tuple[int, str]:
     """Returns (GPU id in GPU_URLS, short GPU name, full GPU name)"""
@@ -141,6 +141,11 @@ def get_gpu() -> tuple[int, str]:
         ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
             return 0, ma[1], gpu_name
+    
+    for gpu_name in gpu_names:
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (B\d{2,5}[A-Z]{0,2})", gpu_name)
+        if ma:
+            return 3, ma[1], gpu_name
     
     for gpu_name in gpu_names:
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name)
