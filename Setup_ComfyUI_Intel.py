@@ -540,26 +540,26 @@ try:
 
         if IS_WINDOWS:
             url = GPU_URLS[gpu_id]
-
+            COUNTRY = "cn" # ! TODO: Temporarily, US is unavailable. CN works though. 
             if chosen_ipex == 0:
                 conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
                 conda.do("pip install dpcpp-cpp-rt==2025.0.0 mkl-dpcpp==2025.0.0 onednn==2025.0.0") #! This is apparently not enough to get it to work without the basekit
             elif chosen_ipex == 1:
                 if IS_WINDOWS:
                     conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
+                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
 
                     conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
                 else:
                     conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
             else:
                 conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
-                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/us/")
+                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
                 conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
                 #TODO: Linux 2.1.40?
         else:
             conda.do("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                              oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
+                              oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/{COUNTRY}/")
         
         conda.do("pip install numpy==1.26.4")
         conda.do("pip install onnxruntime-openvino")
