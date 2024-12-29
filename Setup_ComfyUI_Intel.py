@@ -116,8 +116,8 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
-GPU_URLS = ["xpu", "mtl", "lnl", "xpu"]
-GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage (potentially not working yet)"]
+GPU_URLS = ["xpu", "mtl", "lnl", "bmg"]
+GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage"]
 GPU_A_AN = ["a", "an", "an", "a"]
 
 def get_gpu() -> tuple[int, str]:
@@ -545,7 +545,7 @@ try:
 
         if IS_WINDOWS:
             url = GPU_URLS[gpu_id]
-            COUNTRY = "cn" # ! TODO: Temporarily, US is unavailable. CN works though. 
+            COUNTRY = "us" # US works now. Use CN when it stops working again.
             if chosen_ipex == 0:
                 conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
                 conda.do("pip install dpcpp-cpp-rt==2025.0.0 mkl-dpcpp==2025.0.0 onednn==2025.0.0") #! This is apparently not enough to get it to work without the basekit
