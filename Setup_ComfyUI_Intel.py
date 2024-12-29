@@ -204,7 +204,7 @@ class PFCType:
     def __init__(self, guide: tuple[str, str] | tuple[str] | str):
         if type(guide) is tuple:
             self.Name = guide[0]
-            self.Description = guide[len(guide) == 2]
+            self.Description = guide[len(guide) >= 2]
         else:
             self.Name = guide
             self.Description = guide
@@ -225,6 +225,10 @@ def promptForChoice(header: str, text: str, choices: list, default: int = 0, mul
     choices_mod: list[PFCType] = []
     for c in choices:
         choices_mod.append(PFCType(c))
+
+    if (len(choices_mod) == 1): 
+        printColored(f"Automatically choosing only available choice:\n{choices_mod[0].Name}", "Yellow")
+        return 0
 
     while True:
         for i, choice in enumerate(choices_mod):
@@ -435,14 +439,19 @@ try:
         #    print("Please delete it.")
         #    raise SkipErrorPrintException
 
-        ipex_choices = (
-            ("2.6 nightly", "Slower than 2.3, better compatibility (e.g. Stable Cascade works)", "0"),
-            ("2.3.110", "Faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
-            ("2.1.40", "Legacy version", "2")
-        )
+        ALL_IPEX_CHOICES = (
+                ("2.1.40+IPEX", "Legacy version", "0"),
+                ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
+                ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
+            )
 
-        chosen_ipex = "1"#promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 1)
-        chosen_ipex = int(chosen_ipex)
+        if gpu_id < 3:
+            ipex_choices = ALL_IPEX_CHOICES[1:]
+        else:
+            ipex_choices = ALL_IPEX_CHOICES[2:]
+
+        chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 0)
+        chosen_ipex = int(ipex_choices[chosen_ipex][2])
 
         gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
         # Description of what is to be installed
@@ -458,7 +467,7 @@ try:
             printColored(f" exists, the contained ComfyUI will be updated and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
 
         printColored(", \ninstalling Pytorch/IPEX ", "Default", False)
-        printColored(ipex_choices[chosen_ipex][0], "Cyan", False)
+        printColored(ALL_IPEX_CHOICES[chosen_ipex][0], "Cyan", False)
         printColored(f" for {gpu_text[0]} ", "Default", False)
         printColored(gpu_text[1], "Cyan", False)
         printColored(f" {gpu_text[2]},\nand using Conda at ", "Default", False)
@@ -509,10 +518,8 @@ try:
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
         print("Applying Disty's hijacks (thanks!)")
-        if(chosen_ipex == 0):
-            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", "from ipex_to_cuda import ipex_init\n    ipex_init()\n    import intel_extension_for_pytorch as ipex#\n")
-        else:
-            BIG_CODE = """import transformers # ipex hijacks transformers and makes it unable to load a model
+        if(chosen_ipex == 2):
+            import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex#
     ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
@@ -520,7 +527,12 @@ try:
     from ipex_to_cuda import ipex_init
     ipex_init()
 """
-            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", BIG_CODE)
+        else:
+            import_ipex_code = """import intel_extension_for_pytorch as ipex#
+    from ipex_to_cuda import ipex_init
+    ipex_init()
+"""
+        replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
         os.chdir("../..")
         
         # Install dependencies
@@ -545,10 +557,11 @@ try:
 
         if IS_WINDOWS:
             url = GPU_URLS[gpu_id]
-            COUNTRY = "us" # US works now. Use CN when it stops working again.
-            if chosen_ipex == 0:
-                conda.do(f"python -m pip install torch==2.5.1+xpu --index-url https://download.pytorch.org/whl/test/xpu")
-                conda.do("pip install dpcpp-cpp-rt==2025.0.0 mkl-dpcpp==2025.0.0 onednn==2025.0.0") #! This is apparently not enough to get it to work without the basekit
+            COUNTRY = "us" if chosen_ipex < 2 else "cn" # ! ??? US works for older ipex but not 2.5. CN needed for 2.5.
+            if chosen_ipex == 2:
+                conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
+                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+            
             elif chosen_ipex == 1:
                 if IS_WINDOWS:
                     conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
@@ -557,11 +570,14 @@ try:
                     conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
                 else:
                     conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
-            else:
+            
+            elif chosen_ipex == 0:
                 conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
                          --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
                 conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
-                #TODO: Linux 2.1.40?
+            
+            else:
+                print(f"Impossible to reach code: {chosen_ipex}")
         else:
             conda.do("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                               oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/{COUNTRY}/")
