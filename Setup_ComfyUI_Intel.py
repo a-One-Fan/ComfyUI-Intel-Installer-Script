@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.0.9p"
+version = "0.1.0p"
 
 import os
 import re
