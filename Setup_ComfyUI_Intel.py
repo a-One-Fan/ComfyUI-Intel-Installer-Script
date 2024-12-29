@@ -10,12 +10,14 @@ import subprocess
 import urllib.request as req
 import traceback
 import threading
+import sys
 
 IS_WINDOWS = os.name == "nt"
 
 POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 CMD = "C:\\Windows\\System32\\cmd.exe"
 SHELL = "/bin/bash"
+TEXT_ENCODING = sys.getdefaultencoding()
 
 def CONDA_ACTIVATE(condapath):
     if IS_WINDOWS:
@@ -79,11 +81,11 @@ Type=Application
 
 def print_stdout(p):
     for line in iter(p.stdout.readline, b''):
-        print(line.decode('utf-8'), end='')
+        print(line.decode(TEXT_ENCODING), end='')
 
 def print_stderr(p):
     for line in iter(p.stderr.readline, b''):
-        print(line.decode('utf-8'), end='')
+        print(line.decode(TEXT_ENCODING), end='')
 
 #TODO better ctr+c/z/sigterm/sigkill handling?
 class Conda:
