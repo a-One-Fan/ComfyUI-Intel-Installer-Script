@@ -447,7 +447,7 @@ try:
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
             )
 
-        if gpu_id < 3:
+        if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
             ipex_choices = ALL_IPEX_CHOICES[1:]
         else:
             ipex_choices = ALL_IPEX_CHOICES[2:]
@@ -612,10 +612,14 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
                 slicing = f"export IPEX_FORCE_ATTENTION_SLICE=1\n# {GPU_URLS[gpu_id]} needs forced slicing" 
             else:
                 slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
-            if chosen_ipex == 1:
+            
+            if chosen_ipex == 2:
+                environment_needed = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
+            elif chosen_ipex == 1:
                 environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
             else:
-                environment_needed = f"# implement me :( - ipex {ipex_choices[chosen_ipex][0]}" #TODO
+                environment_needed = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
+            
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".sh"
             start_lowvram_content = f"""#!/bin/bash
 cd $(dirname $\u007bBASH_SOURCE[0]\u007d)
@@ -652,7 +656,7 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
             print("Done.")
 
         if (not IS_WINDOWS):
-            printColored(f"\nYou may need to chmod 0777 the start script Comfy_Intel/{start_lowvram_filename} !", "Yellow")
+            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_lowvram_filename} !", "Yellow")
         printColored("\nComfyUI is set up. Press enter to continue.\n", "Green")
     elif(chosen_install == 1):
         ##################################
