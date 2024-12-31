@@ -557,32 +557,36 @@ try:
             #TODO: Implement Impact Pack setup
             os.chdir("../..")
 
-        if IS_WINDOWS:
-            url = GPU_URLS[gpu_id]
-            COUNTRY = "us" if chosen_ipex < 2 else "cn" # ! ??? US works for older ipex but not 2.5. CN needed for 2.5.
-            if chosen_ipex == 2:
-                conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
-                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-            
-            elif chosen_ipex == 1:
-                if IS_WINDOWS:
-                    conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
 
-                    conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
-                else:
-                    conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
-            
-            elif chosen_ipex == 0:
-                conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
-                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
-            
+        ######################
+        #        IPEX        #
+        ######################
+
+        url = GPU_URLS[gpu_id]
+        COUNTRY = "us" if chosen_ipex < 2 else "cn" # ! ??? US works for older ipex but not 2.5. CN needed for 2.5.
+        if chosen_ipex == 2:
+            if IS_WINDOWS:
+                conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
+                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
             else:
-                print(f"Impossible to reach code: {chosen_ipex}")
+                conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
+        
+        elif chosen_ipex == 1:
+            if IS_WINDOWS:
+                conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+
+                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+            else:
+                conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
+        
+        elif chosen_ipex == 0:
+            conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
+                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+            conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+        
         else:
-            conda.do("python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                              oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/{COUNTRY}/")
+            print(f"Impossible to reach code: {chosen_ipex}")
         
         conda.do("pip install numpy==1.26.4")
         conda.do("pip install onnxruntime-openvino")
