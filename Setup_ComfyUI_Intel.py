@@ -23,8 +23,6 @@ if IS_WINDOWS: # sys.getdefaultencoding AND sys.getfilesystemencoding just blank
 else:
     TEXT_ENCODING = sys.getdefaultencoding()
 
-TEMP_DEVICES_FILENAME = "supported_devices.txt"
-
 def CONDA_ACTIVATE(condapath):
     if IS_WINDOWS:
         return condapath + "\\Scripts\\activate.bat"
@@ -134,7 +132,8 @@ def get_gpu() -> tuple[int, str]:
     gpu_name = ""
     if IS_WINDOWS:
         videocontroller = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"]).decode()
-        gpu_names = videocontroller.split("\n")
+        gpu_names = [videocontroller]
+        # TODO: Multi-gpu?
     else:
         clinfo = subprocess.check_output([SHELL, "-c", "clinfo --raw | grep CL_DEVICE_NAME"]).decode()[:-1]
         gpu_names = []
@@ -446,8 +445,6 @@ try:
         #    print("Please delete it.")
         #    raise SkipErrorPrintException
 
-        # TODO: Check for permissions to create shortcut makeShortcut
-
         ALL_IPEX_CHOICES = (
                 ("2.1.40+IPEX", "Legacy version", "0"),
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
@@ -598,47 +595,20 @@ try:
         conda.do("pip install numpy==1.26.4")
         conda.do("pip install onnxruntime-openvino")
         
-        if chosen_ipex == 2:
-            environment_needed = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
-        elif chosen_ipex == 1:
-            environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
-        else:
-            environment_needed = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
-
-        # ? Maybe remove once IPEX/Torch handles OneAPI better and doesn't error out on iGPUs?
-        if not IS_WINDOWS:
-            conda.do(environment_needed)
-        # https://github.com/intel/AI-Playground/commit/93602fe4f6cf46cddb13ffd9dc082185343acc4a
-        conda.do("echo Determining (un)supported devices...")
-        conda.do(f"python -c \"import torch; import intel_extension_for_pytorch; print(list(filter(lambda i: 'arc' in torch.xpu.get_device_properties(i).name.lower(), range(torch.xpu.device_count()))))\" > {TEMP_DEVICES_FILENAME}")
-        #                                                                        Python does not want to do one-line fors.
-        conda.end()
-        f = open(TEMP_DEVICES_FILENAME, "r")
-        file_string = ""
-        for line in f:
-            file_string += line
-        f.close()
-        supported_devices_list = file_string[1:-2].replace(" ", "")
-        os.remove(TEMP_DEVICES_FILENAME)
-
+        
         # Create start script/s? Maybe 1 script + 1 shortcut only to not confuse people too much.
         START_FILENAME_LOWVRAM=f"start_lowvram"
         if IS_WINDOWS:
-
+            start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
             if gpu_needs_slice(gpu_id):
                 slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
             else:
                 slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
-
-            supported_devices = f"set ONEAPI_DEVICE_SELECTOR=*:{supported_devices_list}"
-            
-            start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
             start_lowvram_content = f"""call \"{CONDA_ACTIVATE(condapath)}\"
 cd /D \"%~dp0\"
 call conda activate ./{CENVNAME}
 cd ./ComfyUI
 {slicing}
-{supported_devices}
 python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         else:
 
@@ -646,8 +616,13 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
                 slicing = f"export IPEX_FORCE_ATTENTION_SLICE=1\n# {GPU_URLS[gpu_id]} needs forced slicing" 
             else:
                 slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
-
-            supported_devices = f"export ONEAPI_DEVICE_SELECTOR=*:{supported_devices_list}"
+            
+            if chosen_ipex == 2:
+                environment_needed = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
+            elif chosen_ipex == 1:
+                environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
+            else:
+                environment_needed = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
             
             start_lowvram_filename = START_FILENAME_LOWVRAM + ".sh"
             start_lowvram_content = f"""#!/bin/bash
@@ -658,7 +633,6 @@ conda activate ./{CENVNAME}
 cd ./ComfyUI
 {environment_needed}
 {slicing}
-{supported_devices}
 python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
 #$SHELL""" # ? Is this more desirable?
         f = open(start_lowvram_filename, 'w')
@@ -675,6 +649,7 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         else:
             makeShortcut(f"{base_path}/ComfyUI.desktop", f"{base_path}/{FOLDERNAME}/{start_lowvram_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
 
+        conda.end()
         print("", flush=True)
 
         if (chosen_custom_nodes == 0):
