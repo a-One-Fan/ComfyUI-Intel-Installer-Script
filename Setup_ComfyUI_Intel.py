@@ -132,8 +132,7 @@ def get_gpu() -> tuple[int, str]:
     gpu_name = ""
     if IS_WINDOWS:
         videocontroller = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"]).decode()
-        gpu_names = [videocontroller]
-        # TODO: Multi-gpu?
+        gpu_names = videocontroller.split("\n")
     else:
         clinfo = subprocess.check_output([SHELL, "-c", "clinfo --raw | grep CL_DEVICE_NAME"]).decode()[:-1]
         gpu_names = []
@@ -445,6 +444,8 @@ try:
         #    print("Please delete it.")
         #    raise SkipErrorPrintException
 
+        # TODO: Check for permissions to create shortcut makeShortcut
+
         ALL_IPEX_CHOICES = (
                 ("2.1.40+IPEX", "Legacy version", "0"),
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
@@ -599,11 +600,13 @@ try:
         # Create start script/s? Maybe 1 script + 1 shortcut only to not confuse people too much.
         START_FILENAME_LOWVRAM=f"start_lowvram"
         if IS_WINDOWS:
-            start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
+
             if gpu_needs_slice(gpu_id):
                 slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
             else:
                 slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
+
+            start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
             start_lowvram_content = f"""call \"{CONDA_ACTIVATE(condapath)}\"
 cd /D \"%~dp0\"
 call conda activate ./{CENVNAME}
