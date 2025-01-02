@@ -17,7 +17,11 @@ IS_WINDOWS = os.name == "nt"
 POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 CMD = "C:\\Windows\\System32\\cmd.exe"
 SHELL = "/bin/bash"
-TEXT_ENCODING = sys.getdefaultencoding()
+if IS_WINDOWS: # sys.getdefaultencoding AND sys.getfilesystemencoding just blanket return utf-8
+    chcp = subprocess.check_output("chcp", shell=True)
+    TEXT_ENCODING = str(int(chcp[chcp.rfind(b' ')+1:-2]))
+else:
+    TEXT_ENCODING = sys.getdefaultencoding()
 
 def CONDA_ACTIVATE(condapath):
     if IS_WINDOWS:
@@ -81,11 +85,11 @@ Type=Application
 
 def print_stdout(p):
     for line in iter(p.stdout.readline, b''):
-        print(line.decode(TEXT_ENCODING), end='')
+        print(line.decode(TEXT_ENCODING, errors='replace'), end='')
 
 def print_stderr(p):
     for line in iter(p.stderr.readline, b''):
-        print(line.decode(TEXT_ENCODING), end='')
+        print(line.decode(TEXT_ENCODING, errors='replace'), end='')
 
 #TODO better ctr+c/z/sigterm/sigkill handling?
 class Conda:
