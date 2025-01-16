@@ -307,13 +307,17 @@ def getConda():
     if IS_WINDOWS:
         UserProfile = os.environ.get("UserProfile", "")
         AppData = os.environ.get("AppData", "")
+        ProgramData = os.environ.get("ProgramData", "")
+        ProgramFiles32 = os.environ.get("programfiles(x86)", "")
+        ProgramFIles64 = os.environ.get("programfiles", "")
     else:
         Home = os.environ.get("HOME", "")
 
     # Autodetect conda
     if (not os.path.isdir(condapath)):
         if IS_WINDOWS:
-            conda_locs = [f"{UserProfile}\\miniconda3", f"{UserProfile}\\anaconda3"]
+            conda_locs = [f"{UserProfile}\\miniconda3", f"{UserProfile}\\anaconda3", f"{ProgramData}\\miniconda3", f"{ProgramData}\\anaconda3",
+                            f"{ProgramFiles32}\\miniconda3", f"{ProgramFiles32}\\anaconda3", f"{ProgramFIles64}\\miniconda3", f"{ProgramFIles64}\\anaconda3"]
         else:
             conda_locs = [f"{Home}/anaconda3", f"{Home}/miniconda3"]
         
