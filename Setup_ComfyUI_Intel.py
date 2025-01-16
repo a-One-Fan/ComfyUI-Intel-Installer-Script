@@ -568,7 +568,7 @@ try:
         ######################
 
         url = GPU_URLS[gpu_id]
-        COUNTRY = "us" if chosen_ipex < 2 else "cn" # ! ??? US works for older ipex but not 2.5. CN needed for 2.5.
+        COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
         if chosen_ipex == 2:
             if IS_WINDOWS:
                 conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
