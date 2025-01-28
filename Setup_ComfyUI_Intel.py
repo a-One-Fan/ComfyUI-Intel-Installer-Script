@@ -506,7 +506,7 @@ try:
             #custom_node(Name="Impact Pack",     Description = "Pack of nodes for object segmentation and dealing with masks",   link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
             custom_node(Name="SUPIR",           Description = "High quality upscaling for realistic images",                    link="https://github.com/kijai/ComfyUI-SUPIR"),
             custom_node(Name="KJNodes",         Description = "Various misc. nodes",                                            link="https://github.com/kijai/ComfyUI-KJNodes"),
-            custom_node(Name="rghtree",         Description = "Optimized execution, progressbar and various misc. nodes",       link="https://github.com/rgthree/rgthree-comfy"),
+            custom_node(Name="rgthree",         Description = "Optimized execution, progressbar and various misc. nodes",       link="https://github.com/rgthree/rgthree-comfy"),
             custom_node(Name="ExtraModels",     Description = "Allows running additional non-SD models (such as Pixart)",       link="https://github.com/city96/ComfyUI_ExtraModels"),
             custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
             custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
