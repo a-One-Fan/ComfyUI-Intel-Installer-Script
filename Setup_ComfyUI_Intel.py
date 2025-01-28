@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.0p"
+version = "0.1.1p"
 
 import os
 import re
@@ -293,13 +293,15 @@ def downloadFile(link: str, filename: str):
     req.install_opener(opener)
     req.urlretrieve(link, filename)
 
-def clone_or_pull(link: str):
+def clone_or_pull(link: str, cwd=None):
+    if(cwd == None):
+        cwd = os.getcwd()
     folder = re.search(r"\/([^\/]+)$", link)[1]
     if not os.path.isdir(folder):
         subprocess.call(("git", "clone", link))
     else:
-        subprocess.call(("git", "restore", "."), cwd=os.getcwd()+f"/{folder}")
-        subprocess.call(("git", "pull"), cwd=os.getcwd()+f"/{folder}")
+        subprocess.call(("git", "restore", "."), cwd=cwd+f"/{folder}")
+        subprocess.call(("git", "pull"), cwd=cwd+f"/{folder}")
 
 def getConda():
     global condapath
@@ -454,12 +456,13 @@ try:
                 ("2.1.40+IPEX", "Legacy version", "0"),
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
+                ("2.6", "Faster than 2.5", "3"),
             )
 
         if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
             ipex_choices = ALL_IPEX_CHOICES[1:]
         else:
-            ipex_choices = ALL_IPEX_CHOICES[2:]
+            ipex_choices = ALL_IPEX_CHOICES[2:-1]
 
         chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 0)
         chosen_ipex = int(ipex_choices[chosen_ipex][2])
@@ -529,7 +532,12 @@ try:
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
         print("Applying Disty's hijacks (thanks!)")
-        if(chosen_ipex == 2):
+        if chosen_ipex == 3:
+            import_ipex_code = """from ipex_to_cuda import ipex_init
+    ipex_init()
+"""
+
+        elif chosen_ipex == 2:
             import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex#
@@ -544,6 +552,7 @@ try:
     ipex_init()
 """
         replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
+        replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
         os.chdir("../..")
         
         # Install dependencies
@@ -573,7 +582,11 @@ try:
 
         url = GPU_URLS[gpu_id]
         COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
-        if chosen_ipex == 2:
+        if chosen_ipex == 3:
+            conda.do("pip uninstall intel_extension_for_pytorch -y")
+            conda.do("pip3 install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+
+        elif chosen_ipex == 2:
             if IS_WINDOWS:
                 conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
                             --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
