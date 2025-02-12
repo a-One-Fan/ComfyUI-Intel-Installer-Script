@@ -514,6 +514,7 @@ try:
             custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
             custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
             custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
+            custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
             #custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes abd UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
         )
         
