@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.1p"
+version = "0.1.2p"
 
 import os
 import re
@@ -131,10 +131,10 @@ def get_gpu() -> tuple[int, str]:
 
     gpu_name = ""
     if IS_WINDOWS:
-        videocontroller = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"]).decode()
+        videocontroller = subprocess.check_output([POWERSHELL, "(Get-WmiObject Win32_VideoController).Name"]).decode(TEXT_ENCODING, errors='replace')
         gpu_names = videocontroller.split("\n")
     else:
-        clinfo = subprocess.check_output([SHELL, "-c", "clinfo --raw | grep CL_DEVICE_NAME"]).decode()[:-1]
+        clinfo = subprocess.check_output([SHELL, "-c", "clinfo --raw | grep CL_DEVICE_NAME"]).decode(TEXT_ENCODING, errors='replace')[:-1]
         gpu_names = []
         for ln in clinfo.split("\n"):
             s = ln.split()
@@ -363,10 +363,10 @@ def getConda():
         if IS_WINDOWS:
             subprocess.check_output([CMD, "/C", f"{CONDA_ACTIVATE(condapath)}"], shell=True)
             conda_test_ver = subprocess.check_output([CMD, "/C", f"{CONDA_ACTIVATE(condapath)} & conda -V"], 
-                                                    stderr=subprocess.STDOUT, shell=True).decode()
+                                                    stderr=subprocess.STDOUT, shell=True).decode(TEXT_ENCODING, errors='replace')
         else:
             subprocess.check_output([SHELL, "-c", f"{CONDA_ACTIVATE(condapath)}"])
-            conda_test_ver = subprocess.check_output([SHELL, "-c", f"{CONDA_ACTIVATE(condapath)}; conda -V"]).decode()[:-1]
+            conda_test_ver = subprocess.check_output([SHELL, "-c", f"{CONDA_ACTIVATE(condapath)}; conda -V"]).decode(TEXT_ENCODING, errors='replace')[:-1]
     except Exception as e:
         conda_test_exc = e
     
@@ -535,7 +535,7 @@ try:
         print("Applying Disty's hijacks (thanks!)")
         if chosen_ipex == 3:
             import_ipex_code = """from ipex_to_cuda import ipex_init
-    ipex_init()
+    print(f\"ipex_init: {ipex_init()}\")
 """
 
         elif chosen_ipex == 2:
@@ -545,12 +545,12 @@ try:
     ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
     transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
     from ipex_to_cuda import ipex_init
-    ipex_init()
+    print(f\"ipex_init: {ipex_init()}\")
 """
         else:
             import_ipex_code = """import intel_extension_for_pytorch as ipex#
     from ipex_to_cuda import ipex_init
-    ipex_init()
+    print(f\"ipex_init: {ipex_init()}\")
 """
         replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
         replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
