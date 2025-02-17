@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.2p"
+version = "0.1.3p"
 
 import os
 import re
@@ -458,6 +458,15 @@ try:
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
                 ("2.6", "Faster than 2.5", "3"),
             )
+        
+        INTEGRITY_CHECK_DEVICE = "_DEVICE_"
+
+        IPEX_INTEGRITY_CHECK = (
+            [],
+            [r"intel_extension_for_pytorch\s+2\.3\.110\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.3\.1\+cxx11\.abi"],
+            [r"intel_extension_for_pytorch\s+2\.5\.10\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.5\.1\+cxx11\.abi"],
+            [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
+        )
 
         if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
             ipex_choices = ALL_IPEX_CHOICES[1:]
@@ -670,6 +679,8 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         else:
             makeShortcut(f"{base_path}/ComfyUI.desktop", f"{base_path}/{FOLDERNAME}/{start_lowvram_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
 
+        conda.do("pip list > env.txt")
+
         conda.end()
         print("", flush=True)
 
@@ -679,6 +690,23 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
             replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             print("Done.")
+
+        with open("env.txt", "r") as env_f:
+            env = env_f.read()
+        
+        os.remove("env.txt")
+        for check in IPEX_INTEGRITY_CHECK[chosen_ipex]:
+            check = check.replace(INTEGRITY_CHECK_DEVICE, GPU_URLS[gpu_id])
+            print(f"Checking environment for {check}")
+            s = re.search(check, env)
+            if s == None:
+                print("Environment:")
+                print(env)
+                printColored(f"One or more packages have failed to download: {check}", "Red")
+                printColored("Please run the script again and ensure your internet connection is working.", "Yellow")
+                raise SkipErrorPrintException
+        print(f"All {len(IPEX_INTEGRITY_CHECK[chosen_ipex])} integrity checks passed.")
+
 
         if (not IS_WINDOWS):
             printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_lowvram_filename} !", "Yellow")
