@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.3p"
+version = "0.1.3p-bmgtest"
 
 import os
 import re
@@ -471,7 +471,7 @@ try:
         if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
             ipex_choices = ALL_IPEX_CHOICES[1:]
         else:
-            ipex_choices = ALL_IPEX_CHOICES[2:-1]
+            ipex_choices = ALL_IPEX_CHOICES[2:]
 
         chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 0)
         chosen_ipex = int(ipex_choices[chosen_ipex][2])
