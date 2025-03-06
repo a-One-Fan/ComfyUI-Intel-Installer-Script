@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.4p"
+version = "0.1.4.1p"
 
 import os
 import re
@@ -554,7 +554,7 @@ try:
         # ComfyUI, hijacks
         clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
         os.chdir("./ComfyUI/comfy")
-        clone_or_pull("https://github.com/a-One-Fan/ipex_to_cuda") #Temporary until PR https://github.com/Disty0/ipex_to_cuda
+        clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
         print("Applying Disty's hijacks (thanks!)")
         if chosen_ipex == 3:
             import_ipex_code = """from ipex_to_cuda import ipex_init
