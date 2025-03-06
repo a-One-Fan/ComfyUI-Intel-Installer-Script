@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.3p-bmgtest"
+version = "0.1.4p"
 
 import os
 import re
@@ -115,6 +115,9 @@ class Conda:
         self.p.stdin.flush()
         self.p.stdin.write((command + "\n").encode())
         self.p.stdin.flush()
+
+    def pipinstall(self, command: str):
+        self.do(f"pip install --retries 10 --timeout=10 {command}")
         
     def end(self):
         self.p.stdin.close()
@@ -512,7 +515,7 @@ try:
                 self.Description = Description
                 self.link = link
 
-        custom_nodes_info = (
+        custom_nodes_info = [
             custom_node(Name="GGUF",            Description = "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM",  link="https://github.com/city96/ComfyUI-GGUF"),
             custom_node(Name="BrushNet",        Description = "More intelligent inpainting, and using any SD1.5/XL model",      link="https://github.com/nullquant/ComfyUI-BrushNet"),
             #custom_node(Name="Impact Pack",     Description = "Pack of nodes for object segmentation and dealing with masks",   link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
@@ -525,12 +528,23 @@ try:
             custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
             custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
             #custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes abd UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
+        ]
+        custom_nodes_info_2 = (
+            custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
+            custom_node(Name="Fake NVDiffRast", Description = "Monkey patcher needed for the 3D pack",                          link="https://github.com/a-One-Fan/fake_nvdr"),
         )
         
         print("Would you like to install all of the following custom nodes:\n")
         formatTable(custom_nodes_info, ("Name", "Description"))
+        print("\nAnd optionally:\n")
+        printColored("EXPERIMENTAL!!!", "Red")
+        formatTable(custom_nodes_info_2, ("Name", "Description"))
         print("\nNote: Some of these require additional models to function, which you can download using this script after installing.")
-        chosen_custom_nodes = promptForChoice("", "", ("Yes", "No"), 0)
+
+        chosen_custom_nodes = promptForChoice("", "", ("No", "Yes", "3D"), 0)
+
+        if chosen_custom_nodes > 1:
+            custom_nodes_info.extend(custom_nodes_info_2)
     
         # Slightly more organized stuff
         if not os.path.isdir(FOLDERNAME): os.mkdir(FOLDERNAME)
@@ -540,7 +554,7 @@ try:
         # ComfyUI, hijacks
         clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
         os.chdir("./ComfyUI/comfy")
-        clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
+        clone_or_pull("https://github.com/a-One-Fan/ipex_to_cuda") #Temporary until PR https://github.com/Disty0/ipex_to_cuda
         print("Applying Disty's hijacks (thanks!)")
         if chosen_ipex == 3:
             import_ipex_code = """from ipex_to_cuda import ipex_init
@@ -571,21 +585,23 @@ try:
             conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
         conda.do(f"conda activate ./{CENVNAME}")
         conda.do("conda install pkg-config libuv -y")
-        conda.do("pip install -r ./ComfyUI/requirements.txt")
+        conda.pipinstall(" -r ./ComfyUI/requirements.txt")
 
-        if (chosen_custom_nodes == 0):
+        if (chosen_custom_nodes > 0):
             os.chdir("./ComfyUI/custom_nodes")
             for cn in custom_nodes_info:
                 folder = re.search(r"\/([^\/]+)$", cn.link)[1]
 
                 clone_or_pull(cn.link)
                 if (os.path.exists(f"./{folder}/requirements.txt")):
-                    conda.do(f"pip install -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
+                    conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
                 
             #TODO: Implement Impact Pack setup
             os.chdir("../..")
 
-
+        if (chosen_custom_nodes > 1):
+            conda.pipinstall("kiui siphash24")
+            
         ######################
         #        IPEX        #
         ######################
@@ -594,34 +610,44 @@ try:
         COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
         if chosen_ipex == 3:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.do("pip3 install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+            conda.pipinstall("--upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
 
         elif chosen_ipex == 2:
             if IS_WINDOWS:
-                conda.do(f"python -m pip install torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
+                conda.pipinstall(f"torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
                             --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
             else:
                 conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
         
         elif chosen_ipex == 1:
             if IS_WINDOWS:
-                conda.do(f"python -m pip install torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                conda.pipinstall(f"torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
 
-                conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+                conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
             else:
                 conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
         
         elif chosen_ipex == 0:
-            conda.do(f"python -m pip install torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
+            conda.pipinstall(f"torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-            conda.do("pip install dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+            conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
         
         else:
             print(f"Impossible to reach code: {chosen_ipex}")
         
-        conda.do("pip install numpy==1.26.4")
-        conda.do("pip install onnxruntime-openvino")
+        conda.pipinstall("numpy==1.26.4")
+        conda.pipinstall("onnxruntime-openvino")
+
+        if (chosen_custom_nodes > 1):
+            if(chosen_ipex == 1):
+                conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cpu.html")
+            if(chosen_ipex == 2):
+                conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.5.0+cpu.html")
+            if(chosen_ipex == 3):
+                printColored("Currently there are no torch-scatter builds for 2.6.", "Red")
+                raise SkipErrorPrintException()
+            conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
         
         
         # Create start script/s? Maybe 1 script + 1 shortcut only to not confuse people too much.
@@ -684,12 +710,16 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         conda.end()
         print("", flush=True)
 
-        if (chosen_custom_nodes == 0):
+        if (chosen_custom_nodes > 0):
             print("Applying SUPIR fixes...")
             site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
             replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             print("Done.")
+
+        if (chosen_custom_nodes > 1):
+            print("Finalizing 3D pack setup...")
+
 
         with open("env.txt", "r") as env_f:
             env = env_f.read()
