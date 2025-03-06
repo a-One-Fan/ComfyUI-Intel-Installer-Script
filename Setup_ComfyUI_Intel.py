@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.4.1p"
+version = "0.1.5p"
 
 import os
 import re
@@ -802,6 +802,9 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         jugxl_rdp2li_sft =  DownloadableFile("https://huggingface.co/RunDiffusion/Juggernaut-XL-Lightning/resolve/main/Juggernaut_RunDiffusionPhoto2_Lightning_4Steps.safetensors", 7634)
         jugxl_v2_sft =      DownloadableFile("https://huggingface.co/RunDiffusion/Juggernaut-XL/resolve/main/juggernautXL_version2.safetensors", 6775)
         animagine_31_sft =  DownloadableFile("https://huggingface.co/cagliostrolab/animagine-xl-3.1/resolve/main/animagine-xl-3.1.safetensors", 6775)
+        animagine_4_z_sft = DownloadableFile("https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/main/animagine-xl-4.0-opt.safetensors", 6775)
+        animagine_4_o_sft = DownloadableFile("https://huggingface.co/cagliostrolab/animagine-xl-4.0-zero/resolve/main/animagine-xl-4.0-zero.safetensors", 6775)
+        nai_vpred_1_0_sft = DownloadableFile("https://huggingface.co/Laxhar/noobai-XL-Vpred-1.0/resolve/main/NoobAI-XL-Vpred-v1.0.safetensors", 6775)
 
         supir_f =           DownloadableFile("https://huggingface.co/Kijai/SUPIR_pruned/resolve/main/SUPIR-v0F_fp16.safetensors", 2856)
         supir_q =           DownloadableFile("https://huggingface.co/Kijai/SUPIR_pruned/resolve/main/SUPIR-v0Q_fp16.safetensors", 2856)
@@ -836,6 +839,9 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         jugxl_v9_rdp2_li =  DownloadableCollection([jugxl_rdp2li_sft], "Juggernaut XL v9 RDP v2 Lightning 4-step") 
         jugxl_v2 =          DownloadableCollection([jugxl_v2_sft], "Juggernaut XL v2")
         animagine_31 =      DownloadableCollection([animagine_31_sft], "Animagine XL 3.1")
+        animagine_4_opt =   DownloadableCollection([animagine_4_o_sft], "Animagine XL 4.0 Opt")
+        animagine_4_zero =  DownloadableCollection([animagine_4_z_sft], "Animagine XL 4.0 Zero")
+        noobai_vpred_1_0 =  DownloadableCollection([nai_vpred_1_0_sft], "NoobAI Vpred 1.0")
         fluxdev8bit =       DownloadableCollection([ae, t5_8, clip_l, fluxdev8b_u], "Flux.1 Dev 8-bit", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
         fluxschnell8bit =   DownloadableCollection([ae, t5_8, clip_l, fluxschnell8b_u], "Flux.1 Schnell 8-bit")
         pixart_sigma =      DownloadableCollection([sdxl_vae_10, t5_8, pixart_sigma_base], "Pixart Sigma")
@@ -843,7 +849,9 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
         dreamshaper_8_inp = DownloadableCollection([drmsh8r_8_inp_ba], "Dreamshaper 8 Inpainting (SD1.5)")
         clip_finetunes =    DownloadableCollection([clip_tune_smooth, clip_tune_text], "CLIP-L finetunes by zer0int")
 
-        collections = [fluxdev4bit, fluxschnell4bit, supir, powerpaint, brushnet_15, brushnet_xl, sdxl_10, jugxl_v9_rdp2, jugxl_v9_rdp2_li, jugxl_v2, animagine_31, pixart_sigma, fluxdev8bit, fluxschnell8bit, dreamshaper_8, dreamshaper_8_inp, clip_finetunes]
+        collections = [fluxdev4bit, fluxschnell4bit, supir, powerpaint, brushnet_15, brushnet_xl, sdxl_10, jugxl_v9_rdp2, 
+                       jugxl_v9_rdp2_li, jugxl_v2, animagine_31, animagine_4_opt, animagine_4_zero, noobai_vpred_1_0, pixart_sigma, 
+                       fluxdev8bit, fluxschnell8bit, dreamshaper_8, dreamshaper_8_inp, clip_finetunes]
 
         os.chdir(FOLDERNAME)
 
