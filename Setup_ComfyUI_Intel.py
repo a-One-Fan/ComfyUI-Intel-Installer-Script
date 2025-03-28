@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.6p"
+version = "0.1.7p"
 
 import os
 import re
@@ -125,9 +125,9 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
-GPU_URLS = ["xpu", "mtl", "lnl", "bmg"]
-GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage"]
-GPU_A_AN = ["a", "an", "an", "a"]
+GPU_URLS = ["xpu", "mtl", "lnl", "bmg", "arl"]
+GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage", "integrated Arrow Lake"]
+GPU_A_AN = ["a", "an", "an", "a", "an"]
 
 def get_gpu() -> tuple[int, str]:
     """Returns (GPU id in GPU_URLS, short GPU name, full GPU name)"""
@@ -145,27 +145,36 @@ def get_gpu() -> tuple[int, str]:
                 continue
             gpu_names.append(' '.join(s[2:]))
 
-    for gpu_name in gpu_names:
+
+
+    for gpu_name in gpu_names: # Alchemist
         ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
             return 0, ma[1], gpu_name
     
-    for gpu_name in gpu_names:
+    for gpu_name in gpu_names: # Battlemage
         ma = re.search(r"Intel\(R\) Arc\(TM\) (B\d{2,5}[A-Z]{0,2})", gpu_name)
         if ma:
             return 3, ma[1], gpu_name
     
-    for gpu_name in gpu_names:
+
+
+    for gpu_name in gpu_names: # Lunar Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name)
         if ma:
             return 2, ma[1], gpu_name
+        
+    for gpu_name in gpu_names: # Arrow Lake
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}T)", gpu_name)
+        if ma:
+            return 4, ma[1], gpu_name
     
-    for gpu_name in gpu_names:
+    for gpu_name in gpu_names: # Meteor Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name)
         if ma:
             return 1, "GPU", gpu_name
         
-    return -1, "Unknown GPU", gpu_name
+    return -1, "Unknown GPU", gpu_names # Return all for error reporting
 
 def gpu_needs_slice(id: int) -> bool:
     return id == 1
