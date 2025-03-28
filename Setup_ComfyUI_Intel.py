@@ -460,6 +460,7 @@ try:
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
                 ("2.6", "Faster than 2.5", "3"),
+                ("Nightly", "Experimental", "4")
             )
         
         INTEGRITY_CHECK_DEVICE = "_DEVICE_"
@@ -469,6 +470,7 @@ try:
             [r"intel_extension_for_pytorch\s+2\.3\.110\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.3\.1\+cxx11\.abi"],
             [r"intel_extension_for_pytorch\s+2\.5\.10\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.5\.1\+cxx11\.abi"],
             [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
+            [r"torch\s+[23]\.\d+\.\d+.+dev.+\+xpu"],
         )
 
         if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
@@ -556,7 +558,7 @@ try:
         os.chdir("./ComfyUI/comfy")
         clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
         print("Applying Disty's hijacks (thanks!)")
-        if chosen_ipex == 3:
+        if chosen_ipex >= 3:
             import_ipex_code = """from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
@@ -608,6 +610,10 @@ try:
 
         url = GPU_URLS[gpu_id]
         COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
+        if chosen_ipex == 4:
+            conda.do("pip uninstall intel_extension_for_pytorch -y")
+            conda.pipinstall("--upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+
         if chosen_ipex == 3:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
             conda.pipinstall("--upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
@@ -644,7 +650,7 @@ try:
                 conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cpu.html")
             if(chosen_ipex == 2):
                 conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.5.0+cpu.html")
-            if(chosen_ipex == 3):
+            if(chosen_ipex >= 3):
                 printColored("Currently there are no torch-scatter builds for 2.6.", "Red")
                 raise SkipErrorPrintException()
             conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
@@ -673,7 +679,7 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
             else:
                 slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
             
-            if chosen_ipex == 2:
+            if chosen_ipex >= 2:
                 environment_needed = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
             elif chosen_ipex == 1:
                 environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
