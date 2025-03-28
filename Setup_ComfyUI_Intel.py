@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.5p"
+version = "0.1.6p"
 
 import os
 import re
@@ -460,7 +460,7 @@ try:
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
                 ("2.6", "Faster than 2.5", "3"),
-                ("Nightly", "Experimental", "4")
+                ("Nightly", "Experimental, 2.3 speeds", "4")
             )
         
         INTEGRITY_CHECK_DEVICE = "_DEVICE_"
