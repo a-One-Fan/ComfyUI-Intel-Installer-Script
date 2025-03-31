@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.7p"
+version = "0.1.8p"
 
 import os
 import re
@@ -621,7 +621,7 @@ try:
         COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
         if chosen_ipex == 4:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.pipinstall("--upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+            conda.pipinstall("--upgrade --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
 
         if chosen_ipex == 3:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
