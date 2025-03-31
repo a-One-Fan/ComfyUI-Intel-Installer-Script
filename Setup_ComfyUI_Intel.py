@@ -479,7 +479,7 @@ try:
             [r"intel_extension_for_pytorch\s+2\.3\.110\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.3\.1\+cxx11\.abi"],
             [r"intel_extension_for_pytorch\s+2\.5\.10\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.5\.1\+cxx11\.abi"],
             [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
-            [r"torch\s+[23]\.\d+\.\d+.+dev.+\+xpu"],
+            [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
         )
 
         if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
@@ -621,11 +621,11 @@ try:
         COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
         if chosen_ipex == 4:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.pipinstall("--upgrade --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+            conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
 
         if chosen_ipex == 3:
             conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.pipinstall("--upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+            conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
 
         elif chosen_ipex == 2:
             if IS_WINDOWS:
