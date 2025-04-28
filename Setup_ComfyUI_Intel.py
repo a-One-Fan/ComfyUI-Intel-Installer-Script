@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.8p"
+version = "0.1.8.1p"
 
 import os
 import re
@@ -476,8 +476,8 @@ try:
 
         IPEX_INTEGRITY_CHECK = (
             [],
-            [r"intel_extension_for_pytorch\s+2\.3\.110\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.3\.1\+cxx11\.abi"],
-            [r"intel_extension_for_pytorch\s+2\.5\.10\+" + INTEGRITY_CHECK_DEVICE, r"torch\s+2\.5\.1\+cxx11\.abi"],
+            [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"],
+            [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"],
             [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
             [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
         )
