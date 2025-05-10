@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.8.1p"
+version = "0.1.9p"
 
 import os
 import re
@@ -544,6 +544,7 @@ try:
             custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
             custom_node(Name="Fake NVDiffRast", Description = "Monkey patcher needed for the 3D pack",                          link="https://github.com/a-One-Fan/fake_nvdr"),
         )
+        requirements_overrides = {"BrushNet": "diffusers accelerate peft"}
         
         print("Would you like to install all of the following custom nodes:\n")
         formatTable(custom_nodes_info, ("Name", "Description"))
@@ -605,7 +606,12 @@ try:
 
                 clone_or_pull(cn.link)
                 if (os.path.exists(f"./{folder}/requirements.txt")):
-                    conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
+                    req_override = requirements_overrides.get(cn.name, False)
+                    if type(req_override) == str:
+                        if req_override:
+                            conda.pipinstall(" " + req_override)
+                    else:
+                        conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
                 
             #TODO: Implement Impact Pack setup
             os.chdir("../..")
