@@ -606,7 +606,7 @@ try:
 
                 clone_or_pull(cn.link)
                 if (os.path.exists(f"./{folder}/requirements.txt")):
-                    req_override = requirements_overrides.get(cn.name, False)
+                    req_override = requirements_overrides.get(cn.Name, False)
                     if type(req_override) == str:
                         if req_override:
                             conda.pipinstall(" " + req_override)
