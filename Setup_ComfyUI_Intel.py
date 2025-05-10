@@ -800,7 +800,7 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
 
         t5_8 =              DownloadableFile("https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors", 4779, "clip")
         clip_l =            DownloadableFile("https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors", 346, "clip")
-        ae =                DownloadableFile("https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors", 327, "vae")
+        ae =                DownloadableFile("https://huggingface.co/Kijai/flux-fp8/resolve/main/flux-vae-bf16.safetensors", 327, "vae")
         sdxl_vae_10 =       DownloadableFile("https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors", 359, "vae")
 
         clip_tune_text =    DownloadableFile("https://huggingface.co/zer0int/CLIP-GmP-ViT-L-14/resolve/main/ViT-L-14-TEXT-detail-improved-hiT-GmP-TE-only-HF.safetensors", 346, "clip")
