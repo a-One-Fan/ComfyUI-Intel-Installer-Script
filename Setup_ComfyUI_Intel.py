@@ -468,7 +468,7 @@ try:
                 ("2.1.40+IPEX", "Legacy version", "0"),
                 ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
                 ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
-                ("2.6", "Faster than 2.5", "3"),
+                ("Stable", "Recommended version", "3"),
                 ("Nightly", "Experimental, 2.3 speeds", "4")
             )
         
@@ -487,7 +487,7 @@ try:
         else:
             ipex_choices = ALL_IPEX_CHOICES[2:]
 
-        chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, 0)
+        chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, len(ipex_choices) - 2)
         chosen_ipex = int(ipex_choices[chosen_ipex][2])
 
         gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
