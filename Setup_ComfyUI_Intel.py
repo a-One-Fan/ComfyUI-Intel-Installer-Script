@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.9p"
+version = "0.1.9.2p"
 
 import os
 import re
@@ -661,13 +661,6 @@ try:
         conda.pipinstall("onnxruntime-openvino")
 
         if (chosen_custom_nodes > 1):
-            if(chosen_ipex == 1):
-                conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.3.1+cpu.html")
-            if(chosen_ipex == 2):
-                conda.pipinstall("torch-scatter -f https://data.pyg.org/whl/torch-2.5.0+cpu.html")
-            if(chosen_ipex >= 3):
-                printColored("Currently there are no torch-scatter builds for 2.6.", "Red")
-                raise SkipErrorPrintException()
             conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
         
         
