@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.1.9.2p"
+version = "0.2.0p"
 
 import os
 import re
@@ -125,6 +125,24 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
+ALL_IPEX_CHOICES = (
+        ("2.1.40+IPEX", "Legacy version", "0"),
+        ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
+        ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
+        ("Stable", "Recommended version", "3"),
+        ("Nightly", "Experimental, 2.3 speeds", "4")
+    )
+
+INTEGRITY_CHECK_DEVICE = "_DEVICE_"
+
+IPEX_INTEGRITY_CHECK = (
+    [],
+    [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"],
+    [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"],
+    [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
+    [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
+)
+
 GPU_URLS = ["xpu", "mtl", "lnl", "bmg", "arl"]
 GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage", "integrated Arrow Lake"]
 GPU_A_AN = ["a", "an", "an", "a", "an"]
@@ -178,6 +196,41 @@ def get_gpu() -> tuple[int, str]:
 
 def gpu_needs_slice(id: int) -> bool:
     return id == 1
+
+def get_slicing_env_conda(gpu_id, chosen_ipex, condapath):
+    if IS_WINDOWS:
+
+        conda = f"""call \"{CONDA_ACTIVATE(condapath)}\"
+cd /D \"%~dp0\"
+call conda activate ./{CENVNAME}"""
+
+        if gpu_needs_slice(gpu_id):
+            slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
+        else:
+            slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
+        environment = ":: No additional environment settings needed for Windows"
+
+    else:
+
+        conda = f"""#!/bin/bash
+cd $(dirname $\u007bBASH_SOURCE[0]\u007d)
+{LINUX_CONDA_SPAM(condapath)}
+conda init
+conda activate ./{CENVNAME}"""
+        
+        if gpu_needs_slice(gpu_id):
+            slicing = f"export IPEX_FORCE_ATTENTION_SLICE=1\n# {GPU_URLS[gpu_id]} needs forced slicing" 
+        else:
+            slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
+        
+        if chosen_ipex >= 2:
+            environment = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
+        elif chosen_ipex == 1:
+            environment = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
+        else:
+            environment = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
+
+    return conda + "\n" + slicing + "\n" + environment
 
 COLORS = {
     "DarkGreen": "\033[32m",
@@ -305,15 +358,22 @@ def downloadFile(link: str, filename: str):
     req.install_opener(opener)
     req.urlretrieve(link, filename)
 
-def clone_or_pull(link: str, cwd=None):
+def clone_or_pull(link: str, cwd=None, recursive=False):
     if(cwd == None):
         cwd = os.getcwd()
     folder = re.search(r"\/([^\/]+)$", link)[1]
-    if not os.path.isdir(folder):
-        subprocess.call(("git", "clone", link))
+    if not recursive:
+        if not os.path.isdir(folder):
+            subprocess.call(("git", "clone", link))
+        else:
+            subprocess.call(("git", "restore", "."), cwd=cwd+f"/{folder}")
+            subprocess.call(("git", "pull"), cwd=cwd+f"/{folder}")
     else:
-        subprocess.call(("git", "restore", "."), cwd=cwd+f"/{folder}")
-        subprocess.call(("git", "pull"), cwd=cwd+f"/{folder}")
+        if not os.path.isdir(folder):
+            subprocess.call(("git", "clone", "--recursive", link))
+        else:
+            subprocess.call(("git", "restore", "."), cwd=cwd+f"/{folder}")
+            subprocess.call(("git", "pull", "--recurse-submodules"), cwd=cwd+f"/{folder}")
 
 def getConda():
     global condapath
@@ -406,6 +466,56 @@ def getConda():
 
     return condapath
 
+def ipex_pre(gpu_id):
+    if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
+        ipex_choices = ALL_IPEX_CHOICES[1:]
+    else:
+        ipex_choices = ALL_IPEX_CHOICES[2:]
+
+    chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, len(ipex_choices) - 2)
+    chosen_ipex = int(ipex_choices[chosen_ipex][2])
+
+    gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
+
+    return chosen_ipex, gpu_text
+
+def ipex_install(conda: Conda, gpu_id, chosen_ipex):
+    url = GPU_URLS[gpu_id]
+    COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
+    if chosen_ipex == 4:
+        conda.do("pip uninstall intel_extension_for_pytorch -y")
+        conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+
+    if chosen_ipex == 3:
+        conda.do("pip uninstall intel_extension_for_pytorch -y")
+        conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+
+    elif chosen_ipex == 2:
+        if IS_WINDOWS:
+            conda.pipinstall(f"torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
+                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+        else:
+            conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
+    
+    elif chosen_ipex == 1:
+        if IS_WINDOWS:
+            conda.pipinstall(f"torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+                    --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+
+            conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+        else:
+            conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
+    
+    elif chosen_ipex == 0:
+        conda.pipinstall(f"torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
+                    --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
+        conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+    
+    else:
+        print(f"Impossible to reach code: {chosen_ipex}")
+    
+    conda.pipinstall("numpy==1.26.4")
+
 class SkipErrorPrintException(Exception):
     pass
 
@@ -446,13 +556,19 @@ try:
 
     choices = (
         ("Set up ComfyUI", "Download ComfyUI and install dependencies and other things needed to run on Intel Arc"),
-        ("Download a model")
+        ("Download a model"),
+        ("Set up kohya_ss", "Download kohya_ss and install dependencies and other things needed to run on Intel Arc")
     )
+
+    REPO_NAMES = ["ComfyUI", "aa", "kohya_ss"]
+
+    START_SCRIPT_NAMES = ["start_lowvram", "aa", "start_kohya_gui"]
+    SHORTCUT_NAMES = ["ComfyUI", "aa", "Kohya_ss"]
 
     chosen_install = promptForChoice("---", "What to do?", choices, 0)
     #chosen_install = 0
 
-    if (chosen_install == 0):
+    if (chosen_install in [0, 2]):
         ####################################
         #         Install ComfyUI          #
         ####################################
@@ -464,44 +580,21 @@ try:
 
         # TODO: Check for permissions to create shortcut makeShortcut
 
-        ALL_IPEX_CHOICES = (
-                ("2.1.40+IPEX", "Legacy version", "0"),
-                ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
-                ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
-                ("Stable", "Recommended version", "3"),
-                ("Nightly", "Experimental, 2.3 speeds", "4")
-            )
-        
-        INTEGRITY_CHECK_DEVICE = "_DEVICE_"
+        repo = REPO_NAMES[chosen_install]
 
-        IPEX_INTEGRITY_CHECK = (
-            [],
-            [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"],
-            [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"],
-            [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
-            [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
-        )
-
-        if gpu_id < 3 and IS_WINDOWS: # TODO temp: 2.3 has some onnx issue
-            ipex_choices = ALL_IPEX_CHOICES[1:]
-        else:
-            ipex_choices = ALL_IPEX_CHOICES[2:]
-
-        chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, len(ipex_choices) - 2)
-        chosen_ipex = int(ipex_choices[chosen_ipex][2])
-
-        gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
+        chosen_ipex, gpu_text = ipex_pre(gpu_id)
         # Description of what is to be installed
         print("")
         printColored("A folder ", "Default", False)
         printColored(FOLDERNAME, "Cyan", False)
 
         if not os.path.isdir(FOLDERNAME):
-            printColored(f" containing ComfyUI and Conda environment \"{CENVNAME}\" will be created in ", "Default")
+            printColored(f" containing {repo} and Conda environment \"{CENVNAME}\" will be created in ", "Default")
             printColored(base_path, "Cyan", False)
         else:
             conda_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{CENVNAME}") else "created"
-            printColored(f" exists, the contained ComfyUI will be updated and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
+            repo_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{repo}") else "created"
+            printColored(f" exists, the contained {repo} will be {repo_text} and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
 
         printColored(", \ninstalling Pytorch/IPEX ", "Default", False)
         printColored(ALL_IPEX_CHOICES[chosen_ipex][0], "Cyan", False)
@@ -510,71 +603,72 @@ try:
         printColored(f" {gpu_text[2]},\nand using Conda at ", "Default", False)
         printColored(os.path.join(condapath, ''), "Cyan", False)
         scripttype = "batch" if IS_WINDOWS else "shell"
-        print(f",\nas well as containing 1 {scripttype} script - used to launch ComfyUI (with --lowvram),")
+        maybe_vram = repo if chosen_install != 0 else f"{repo} (with --lowvram)"
+        print(f",\nas well as containing 1 {scripttype} script - used to launch {maybe_vram},")
         print("and a shortcut to it outside the folder.")
         print("\nContinue?")
         c = promptForChoice("", "", ("Yes", "No"))
         if(c):
             exit()
     
-        class custom_node:
-            Name: str
-            Description: str
-            link: str
-            def __init__(self, Name, Description, link):
-                self.Name = Name
-                self.Description = Description
-                self.link = link
-
-        custom_nodes_info = [
-            custom_node(Name="GGUF",            Description = "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM",  link="https://github.com/city96/ComfyUI-GGUF"),
-            custom_node(Name="BrushNet",        Description = "More intelligent inpainting, and using any SD1.5/XL model",      link="https://github.com/nullquant/ComfyUI-BrushNet"),
-            #custom_node(Name="Impact Pack",     Description = "Pack of nodes for object segmentation and dealing with masks",   link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
-            custom_node(Name="SUPIR",           Description = "High quality upscaling for realistic images",                    link="https://github.com/kijai/ComfyUI-SUPIR"),
-            custom_node(Name="KJNodes",         Description = "Various misc. nodes",                                            link="https://github.com/kijai/ComfyUI-KJNodes"),
-            custom_node(Name="rgthree",         Description = "Optimized execution, progressbar and various misc. nodes",       link="https://github.com/rgthree/rgthree-comfy"),
-            custom_node(Name="ExtraModels",     Description = "Allows running additional non-SD models (such as Pixart)",       link="https://github.com/city96/ComfyUI_ExtraModels"),
-            custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
-            custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
-            custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
-            custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
-            #custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes abd UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
-        ]
-        custom_nodes_info_2 = (
-            custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
-            custom_node(Name="Fake NVDiffRast", Description = "Monkey patcher needed for the 3D pack",                          link="https://github.com/a-One-Fan/fake_nvdr"),
-        )
-        requirements_overrides = {"BrushNet": "diffusers accelerate peft"}
-        
-        print("Would you like to install all of the following custom nodes:\n")
-        formatTable(custom_nodes_info, ("Name", "Description"))
-        print("\nAnd optionally:\n")
-        printColored("EXPERIMENTAL!!!", "Red")
-        formatTable(custom_nodes_info_2, ("Name", "Description"))
-        print("\nNote: Some of these require additional models to function, which you can download using this script after installing.")
-
-        chosen_custom_nodes = promptForChoice("", "", ("No", "Yes", "3D"), 0)
-
-        if chosen_custom_nodes > 1:
-            custom_nodes_info.extend(custom_nodes_info_2)
-    
-        # Slightly more organized stuff
         if not os.path.isdir(FOLDERNAME): os.mkdir(FOLDERNAME)
         os.chdir(FOLDERNAME)
-        
-        
-        # ComfyUI, hijacks
-        clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
-        os.chdir("./ComfyUI/comfy")
-        clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
-        print("Applying Disty's hijacks (thanks!)")
-        if chosen_ipex >= 3:
-            import_ipex_code = """from ipex_to_cuda import ipex_init
+
+        if chosen_install == 0:
+
+            class custom_node:
+                Name: str
+                Description: str
+                link: str
+                def __init__(self, Name, Description, link):
+                    self.Name = Name
+                    self.Description = Description
+                    self.link = link
+
+            custom_nodes_info = [
+                custom_node(Name="GGUF",            Description = "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM",  link="https://github.com/city96/ComfyUI-GGUF"),
+                custom_node(Name="BrushNet",        Description = "More intelligent inpainting, and using any SD1.5/XL model",      link="https://github.com/nullquant/ComfyUI-BrushNet"),
+                #custom_node(Name="Impact Pack",     Description = "Pack of nodes for object segmentation and dealing with masks",   link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
+                custom_node(Name="SUPIR",           Description = "High quality upscaling for realistic images",                    link="https://github.com/kijai/ComfyUI-SUPIR"),
+                custom_node(Name="KJNodes",         Description = "Various misc. nodes",                                            link="https://github.com/kijai/ComfyUI-KJNodes"),
+                custom_node(Name="rgthree",         Description = "Optimized execution, progressbar and various misc. nodes",       link="https://github.com/rgthree/rgthree-comfy"),
+                custom_node(Name="ExtraModels",     Description = "Allows running additional non-SD models (such as Pixart)",       link="https://github.com/city96/ComfyUI_ExtraModels"),
+                custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
+                custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
+                custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
+                custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
+                #custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes abd UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
+            ]
+            custom_nodes_info_2 = (
+                custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
+                custom_node(Name="Fake NVDiffRast", Description = "Monkey patcher needed for the 3D pack",                          link="https://github.com/a-One-Fan/fake_nvdr"),
+            )
+            requirements_overrides = {"BrushNet": "diffusers accelerate peft"}
+            
+            print("Would you like to install all of the following custom nodes:\n")
+            formatTable(custom_nodes_info, ("Name", "Description"))
+            print("\nAnd optionally:\n")
+            printColored("EXPERIMENTAL!!!", "Red")
+            formatTable(custom_nodes_info_2, ("Name", "Description"))
+            print("\nNote: Some of these require additional models to function, which you can download using this script after installing.")
+
+            chosen_custom_nodes = promptForChoice("", "", ("No", "Yes", "3D"), 0)
+
+            if chosen_custom_nodes > 1:
+                custom_nodes_info.extend(custom_nodes_info_2)
+            
+            # ComfyUI, hijacks
+            clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
+            os.chdir("./ComfyUI/comfy")
+            clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
+            print("Applying Disty's hijacks (thanks!)")
+            if chosen_ipex >= 3:
+                import_ipex_code = """from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
 
-        elif chosen_ipex == 2:
-            import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
+            elif chosen_ipex == 2:
+                import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex#
     ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
@@ -582,156 +676,91 @@ try:
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
-        else:
-            import_ipex_code = """import intel_extension_for_pytorch as ipex#
+            else:
+                import_ipex_code = """import intel_extension_for_pytorch as ipex#
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
-        replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
-        replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
-        os.chdir("../..")
-        
-        # Install dependencies
-        conda = Conda(condapath)
-        if not os.path.isdir(CENVNAME):
-            conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
-        conda.do(f"conda activate ./{CENVNAME}")
-        conda.do("conda install pkg-config libuv -y")
-        conda.pipinstall(" -r ./ComfyUI/requirements.txt")
-
-        if (chosen_custom_nodes > 0):
-            os.chdir("./ComfyUI/custom_nodes")
-            for cn in custom_nodes_info:
-                folder = re.search(r"\/([^\/]+)$", cn.link)[1]
-
-                clone_or_pull(cn.link)
-                if (os.path.exists(f"./{folder}/requirements.txt")):
-                    req_override = requirements_overrides.get(cn.Name, False)
-                    if type(req_override) == str:
-                        if req_override:
-                            conda.pipinstall(" " + req_override)
-                    else:
-                        conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
-                
-            #TODO: Implement Impact Pack setup
+            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
+            replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             os.chdir("../..")
-
-        if (chosen_custom_nodes > 1):
-            conda.pipinstall("kiui siphash24")
             
-        ######################
-        #        IPEX        #
-        ######################
+            # Install dependencies
+            conda = Conda(condapath)
+            if not os.path.isdir(CENVNAME):
+                conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
+            conda.do(f"conda activate ./{CENVNAME}")
+            conda.do("conda install pkg-config libuv -y")
+            conda.pipinstall(" -r ./ComfyUI/requirements.txt")
 
-        url = GPU_URLS[gpu_id]
-        COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
-        if chosen_ipex == 4:
-            conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+            if (chosen_custom_nodes > 0):
+                os.chdir("./ComfyUI/custom_nodes")
+                for cn in custom_nodes_info:
+                    folder = re.search(r"\/([^\/]+)$", cn.link)[1]
 
-        if chosen_ipex == 3:
-            conda.do("pip uninstall intel_extension_for_pytorch -y")
-            conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+                    clone_or_pull(cn.link)
+                    if (os.path.exists(f"./{folder}/requirements.txt")):
+                        req_override = requirements_overrides.get(cn.Name, False)
+                        if type(req_override) == str:
+                            if req_override:
+                                conda.pipinstall(" " + req_override)
+                        else:
+                            conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
+                    
+                #TODO: Implement Impact Pack setup
+                os.chdir("../..")
 
-        elif chosen_ipex == 2:
-            if IS_WINDOWS:
-                conda.pipinstall(f"torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
-                            --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-            else:
-                conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
-        
-        elif chosen_ipex == 1:
-            if IS_WINDOWS:
-                conda.pipinstall(f"torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
-                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-
-                conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
-            else:
-                conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
-        
-        elif chosen_ipex == 0:
-            conda.pipinstall(f"torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
-                        --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
-            conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
+            if (chosen_custom_nodes > 1):
+                conda.pipinstall("kiui siphash24")
         
         else:
-            print(f"Impossible to reach code: {chosen_ipex}")
-        
-        conda.pipinstall("numpy==1.26.4")
-        conda.pipinstall("onnxruntime-openvino")
+            clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
 
-        if (chosen_custom_nodes > 1):
-            conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
-        
-        
-        # Create start script/s? Maybe 1 script + 1 shortcut only to not confuse people too much.
-        START_FILENAME_LOWVRAM=f"start_lowvram"
-        if IS_WINDOWS:
+        ipex_install(conda, gpu_id, chosen_ipex)
 
-            if gpu_needs_slice(gpu_id):
-                slicing = f"set IPEX_FORCE_ATTENTION_SLICE=1\n:: {GPU_URLS[gpu_id]} needs forced slicing" 
-            else:
-                slicing = f":: {GPU_URLS[gpu_id]} does not need forced slicing"
+        if (chosen_install == 0):
+            conda.pipinstall("onnxruntime-openvino")
+            if (chosen_custom_nodes > 1):
+                conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
+        
+        start_script_filename = START_SCRIPT_NAMES[chosen_install] + (".bat" if IS_WINDOWS else ".sh")
 
-            start_lowvram_filename = START_FILENAME_LOWVRAM + ".bat"
-            start_lowvram_content = f"""call \"{CONDA_ACTIVATE(condapath)}\"
-cd /D \"%~dp0\"
-call conda activate ./{CENVNAME}
-cd ./ComfyUI
-{slicing}
-python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
+        sleco = get_slicing_env_conda(gpu_id, chosen_ipex, condapath)
+
+        start_script_content = sleco + "\n" + "cd ./" + REPO_NAMES[chosen_install] + "\n"
+
+        if chosen_install == 0:
+            start_script_content += "python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"
         else:
+            start_script_content += "python ./kohya_gui --listen 127.0.0.1 --server_port 7860 --inbrowser --share"
 
-            if gpu_needs_slice(gpu_id):
-                slicing = f"export IPEX_FORCE_ATTENTION_SLICE=1\n# {GPU_URLS[gpu_id]} needs forced slicing" 
-            else:
-                slicing = f"# {GPU_URLS[gpu_id]} does not need forced slicing"
-            
-            if chosen_ipex >= 2:
-                environment_needed = f"# Nothing needed to export/source for IPEX {ALL_IPEX_CHOICES[chosen_ipex][0]}"
-            elif chosen_ipex == 1:
-                environment_needed = f"export OCL_ICD_VENDORS=/etc/OpenCL/vendors\nexport CCL_ROOT={condapath}"
-            else:
-                environment_needed = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
-            
-            start_lowvram_filename = START_FILENAME_LOWVRAM + ".sh"
-            start_lowvram_content = f"""#!/bin/bash
-cd $(dirname $\u007bBASH_SOURCE[0]\u007d)
-{LINUX_CONDA_SPAM(condapath)}
-conda init
-conda activate ./{CENVNAME}
-cd ./ComfyUI
-{environment_needed}
-{slicing}
-python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
-#$SHELL""" # ? Is this more desirable?
-        f = open(start_lowvram_filename, 'w')
-        f.write(start_lowvram_content)
+        f = open(start_script_filename, 'w')
+        f.write(start_script_content)
         f.close()
         
         
-        # Shortcut/s?
+        # Shortcut
         if IS_WINDOWS:
-            retc = makeShortcut(f"{base_path}\\ComfyUI.lnk", CMD, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_lowvram_filename}`\"", "shell32.dll", 14)
+            retc = makeShortcut(f"{base_path}\\{SHORTCUT_NAMES[chosen_install]}.lnk", CMD, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_script_filename}`\"", "shell32.dll", 14)
             if retc != 0:
-                print("An error ocurred when creating shortcut.")
+                print(f"An error ocurred when creating shortcut ({retc}).")
                 raise SkipErrorPrintException
         else:
-            makeShortcut(f"{base_path}/ComfyUI.desktop", f"{base_path}/{FOLDERNAME}/{start_lowvram_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
+            makeShortcut(f"{base_path}/{SHORTCUT_NAMES[chosen_install]}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
 
         conda.do("pip list > env.txt")
 
         conda.end()
         print("", flush=True)
 
-        if (chosen_custom_nodes > 0):
+        if (chosen_install == 0 and chosen_custom_nodes > 0):
             print("Applying SUPIR fixes...")
             site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
             replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             print("Done.")
 
-        if (chosen_custom_nodes > 1):
+        if (chosen_install == 0 and chosen_custom_nodes > 1):
             print("Finalizing 3D pack setup...")
 
 
@@ -753,8 +782,10 @@ python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"""
 
 
         if (not IS_WINDOWS):
-            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_lowvram_filename} !", "Yellow")
+            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_script_filename} !", "Yellow")
         printColored("\nComfyUI is set up. Press enter to continue.\n", "Green")
+    
+
     elif(chosen_install == 1):
         ##################################
         #        Download a model        #
