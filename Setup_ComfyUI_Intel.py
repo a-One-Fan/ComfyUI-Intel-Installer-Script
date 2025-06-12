@@ -65,19 +65,19 @@ if IS_WINDOWS:
                          $sho_lowvram.IconLocation = \"{iconpath},{iconid}\"; \
                          $sho_lowvram.Save();"])
 else:
-    def makeShortcut(filepath: str, target: str, args: str, iconpath: str):
+    def makeShortcut(filepath: str, target: str, args: str, iconpath: str, name: str):
         f = open(filepath, 'w')
         f.write(f"""[Desktop Entry]
 Categories=Graphics;
-Comment[en_US]=ComfyUI
-Comment=ComfyUI
+Comment[en_US]={name}
+Comment={name}
 Exec={target} {args}
 GenericName[en_US]=
 GenericName=
 Keywords=ai
 Icon={iconpath}
-Name[en_US]=ComfyUI
-Name=ComfyUI
+Name[en_US]={name}
+Name={name}
 Terminal=true
 TerminalOptions=
 Type=Application
@@ -271,7 +271,7 @@ class PFCType:
     Key: str
     Name: str
     Description: str
-    def __init__(self, guide: tuple[str, str] | tuple[str] | str):
+    def __init__(self, guide: tuple[str, str] | tuple[str] | str, other_keys: list[str] = None):
         if type(guide) is tuple:
             self.Name = guide[0]
             self.Description = guide[len(guide) >= 2]
@@ -283,6 +283,18 @@ class PFCType:
             self.Key = guide[2]
         else:
             self.Key = self.Name[0].upper()
+            if other_keys:
+                if self.Key in other_keys:
+                    for i in range(len(self.Name)):
+                        if self.Name[i].isalpha():
+                            self.Key = self.Name[i].upper()
+                        if not (self.Key in other_keys):
+                            break
+                if self.Key in other_keys:
+                    for letter in "ABCDEFGHIJKLMNOPQRTSUVWXYZ":
+                        self.Key = letter
+                if self.Key in other_keys:
+                    print(f"Too many keys: {other_keys}")
 
 def inrange(val, min, max):
     """[min, max]"""
@@ -294,7 +306,7 @@ def promptForChoice(header: str, text: str, choices: list, default: int = 0, mul
 
     choices_mod: list[PFCType] = []
     for c in choices:
-        choices_mod.append(PFCType(c))
+        choices_mod.append(PFCType(c, [c.Key for c in choices_mod]))
 
     if (len(choices_mod) == 1): 
         printColored(f"Automatically choosing only available choice:\n{choices_mod[0].Name}", "Yellow")
@@ -514,14 +526,15 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
     else:
         print(f"Impossible to reach code: {chosen_ipex}")
     
-    conda.pipinstall("numpy==1.26.4")
+    if chosen_install == 0:
+        conda.pipinstall("numpy==1.26.4") # TODO: Is this still necessary?
 
 class SkipErrorPrintException(Exception):
     pass
 
 try:
     printColored(f"Script version: {version}", "DarkGreen")
-
+    print("Loading...")
     # clinfo
     if not IS_WINDOWS:
         try:
@@ -594,7 +607,7 @@ try:
         else:
             conda_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{CENVNAME}") else "created"
             repo_text = "updated" if os.path.isdir(f"./{FOLDERNAME}/{repo}") else "created"
-            printColored(f" exists, the contained {repo} will be {repo_text} and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
+            printColored(f" exists, {repo} will be {repo_text} and Conda environment \"{CENVNAME}\" {conda_text}", "Default", False)
 
         printColored(", \ninstalling Pytorch/IPEX ", "Default", False)
         printColored(ALL_IPEX_CHOICES[chosen_ipex][0], "Cyan", False)
@@ -684,15 +697,19 @@ try:
             replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
             replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             os.chdir("../..")
+        else:
+            clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
             
-            # Install dependencies
-            conda = Conda(condapath)
-            if not os.path.isdir(CENVNAME):
-                conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
-            conda.do(f"conda activate ./{CENVNAME}")
-            conda.do("conda install pkg-config libuv -y")
-            conda.pipinstall(" -r ./ComfyUI/requirements.txt")
+        conda = Conda(condapath)
+        if not os.path.isdir(CENVNAME):
+            conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
+        conda.do(f"conda activate ./{CENVNAME}")
+        conda.do("conda install pkg-config libuv -y")
+        conda.do(f"cd ./{REPO_NAMES[chosen_install]}") # Kohya's requirements install fails if done outside its folder
+        conda.pipinstall(f" -r requirements.txt")
+        conda.do(f"cd ..")
 
+        if (chosen_install == 0):
             if (chosen_custom_nodes > 0):
                 os.chdir("./ComfyUI/custom_nodes")
                 for cn in custom_nodes_info:
@@ -712,9 +729,6 @@ try:
 
             if (chosen_custom_nodes > 1):
                 conda.pipinstall("kiui siphash24")
-        
-        else:
-            clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
 
         ipex_install(conda, gpu_id, chosen_ipex)
 
@@ -732,7 +746,7 @@ try:
         if chosen_install == 0:
             start_script_content += "python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"
         else:
-            start_script_content += "python ./kohya_gui --listen 127.0.0.1 --server_port 7860 --inbrowser --share"
+            start_script_content += "python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify"
 
         f = open(start_script_filename, 'w')
         f.write(start_script_content)
@@ -746,7 +760,7 @@ try:
                 print(f"An error ocurred when creating shortcut ({retc}).")
                 raise SkipErrorPrintException
         else:
-            makeShortcut(f"{base_path}/{SHORTCUT_NAMES[chosen_install]}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg")
+            makeShortcut(f"{base_path}/{SHORTCUT_NAMES[chosen_install]}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg", REPO_NAMES[chosen_install])
 
         conda.do("pip list > env.txt")
 
@@ -782,8 +796,8 @@ try:
 
 
         if (not IS_WINDOWS):
-            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_script_filename} !", "Yellow")
-        printColored("\nComfyUI is set up. Press enter to continue.\n", "Green")
+            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_script_filename}  !", "Yellow")
+        printColored(f"{REPO_NAMES[chosen_install]} is set up. Press enter to continue.\n", "Green")
     
 
     elif(chosen_install == 1):
