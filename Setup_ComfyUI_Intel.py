@@ -526,8 +526,7 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
     else:
         print(f"Impossible to reach code: {chosen_ipex}")
     
-    if chosen_install == 0:
-        conda.pipinstall("numpy==1.26.4") # TODO: Is this still necessary?
+    conda.pipinstall("numpy==1.26.4") # Necessary, even for kohya.
 
 class SkipErrorPrintException(Exception):
     pass
