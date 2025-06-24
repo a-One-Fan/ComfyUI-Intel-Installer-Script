@@ -814,6 +814,9 @@ try:
             conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
         conda.do(f"conda activate ./{CENVNAME}")
         conda.do("conda install pkg-config libuv -y")
+        if not IS_WINDOWS:
+            conda.do("conda install -c conda-forge libstdcxx-ng")
+            # Outdated libstdc++ breaks ipex/torch
         conda.do(f"cd ./{REPO_NAMES[chosen_install]}") # Kohya's requirements install fails if done outside its folder
         conda.pipinstall(f" -r requirements.txt")
         conda.do(f"cd ..")
