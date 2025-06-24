@@ -273,36 +273,38 @@ def get_gpu() -> tuple[int, str]:
             newname = gpu_name
 
         translated_gpu_names.append(newname)
+
     gpu_names = translated_gpu_names
 
-    for gpu_name in gpu_names: # Alchemist
+    for gpu_name in gpu_names: 
+        
+        # Alchemist
         ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name, re.IGNORECASE)
         if ma:
             return 0, ma[1], gpu_name
     
-    for gpu_name in gpu_names: # Battlemage
-        ma = re.search(r"Intel\(R\) Arc\(TM\) (B\d{2,5}[A-Z]{0,2})", gpu_name, re.IGNORECASE)
+        # Battlemage
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (?:Pro )?(B\d{2,5}[A-Z]{0,2})", gpu_name, re.IGNORECASE)
         if ma:
             return 3, ma[1], gpu_name
     
 
 
-    for gpu_name in gpu_names: # Lunar Lake
+        # Lunar Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name, re.IGNORECASE)
         if ma:
             return 2, ma[1], gpu_name
         
-    for gpu_name in gpu_names: # Arrow Lake
+        # Arrow Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}T)", gpu_name, re.IGNORECASE)
         if ma:
             return 4, ma[1], gpu_name
     
-    for gpu_name in gpu_names: # Meteor Lake
+        # Meteor Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name, re.IGNORECASE)
-        mb = re.search(r"Intel\(R\) Graphics", gpu_name, re.IGNORECASE)
-        if ma or mb:
+        if ma:
             return 1, "GPU", gpu_name
-        
+          
     return -1, "Unknown GPU", gpu_names # Return all for error reporting
 
 def gpu_needs_slice(id: int) -> bool:
@@ -816,7 +818,7 @@ try:
         conda.do(f"conda activate ./{CENVNAME}")
         conda.do("conda install pkg-config libuv -y")
         if not IS_WINDOWS:
-            conda.do("conda install -c conda-forge libstdcxx-ng")
+            conda.do("conda install -c conda-forge libstdcxx-ng -y")
             # Outdated libstdc++ breaks ipex/torch
         conda.do(f"cd ./{REPO_NAMES[chosen_install]}") # Kohya's requirements install fails if done outside its folder
         conda.pipinstall(f" -r requirements.txt")
