@@ -276,30 +276,31 @@ def get_gpu() -> tuple[int, str]:
     gpu_names = translated_gpu_names
 
     for gpu_name in gpu_names: # Alchemist
-        ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name, re.IGNORECASE)
         if ma:
             return 0, ma[1], gpu_name
     
     for gpu_name in gpu_names: # Battlemage
-        ma = re.search(r"Intel\(R\) Arc\(TM\) (B\d{2,5}[A-Z]{0,2})", gpu_name)
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (B\d{2,5}[A-Z]{0,2})", gpu_name, re.IGNORECASE)
         if ma:
             return 3, ma[1], gpu_name
     
 
 
     for gpu_name in gpu_names: # Lunar Lake
-        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name)
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}V)", gpu_name, re.IGNORECASE)
         if ma:
             return 2, ma[1], gpu_name
         
     for gpu_name in gpu_names: # Arrow Lake
-        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}T)", gpu_name)
+        ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}T)", gpu_name, re.IGNORECASE)
         if ma:
             return 4, ma[1], gpu_name
     
     for gpu_name in gpu_names: # Meteor Lake
-        ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name)
-        if ma:
+        ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name, re.IGNORECASE)
+        mb = re.search(r"Intel\(R\) Graphics", gpu_name, re.IGNORECASE)
+        if ma or mb:
             return 1, "GPU", gpu_name
         
     return -1, "Unknown GPU", gpu_names # Return all for error reporting
