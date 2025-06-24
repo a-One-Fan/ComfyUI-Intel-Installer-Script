@@ -143,6 +143,105 @@ IPEX_INTEGRITY_CHECK = (
     [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
 )
 
+PCI_IDS = {}
+
+# For easy copy-pasting
+
+def CHIPSET(id, type, name1, name2):
+    global PCI_IDS
+    PCI_IDS[id] = (type, name1, name2)
+
+rpl, rpl_p, dg1, sg1, dg2_g10, dg2_g11, dg2_g12 = 0, 1, 2, 3, 4, 5, 6
+atsm_g10, atsm_g11, lnl, mtl_u = 0, 1, 2, 3
+mtl_h, arl_u, arl_h, bmg = 0, 1, 2, 3
+
+# https://gitlab.freedesktop.org/mesa/mesa/-/raw/main/include/pci_ids/iris_pci_ids.h?ref_type=heads
+
+CHIPSET(0xa780, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa781, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa782, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa783, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa788, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa789, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa78a, rpl, "RPL-S", "Intel(R) Graphics")
+CHIPSET(0xa78b, rpl, "RPL-S", "Intel(R) Graphics")
+
+CHIPSET(0xa720, rpl_p, "RPL-P", "Intel(R) Graphics")
+CHIPSET(0xa721, rpl_p, "RPL-U", "Intel(R) Graphics")
+CHIPSET(0xa7a0, rpl_p, "RPL-P", "Intel(R) Iris(R) Xe Graphics")
+CHIPSET(0xa7a1, rpl_p, "RPL-U", "Intel(R) Iris(R) Xe Graphics")
+CHIPSET(0xa7a8, rpl_p, "RPL-P", "Intel(R) Graphics")
+CHIPSET(0xa7a9, rpl_p, "RPL-U", "Intel(R) Graphics")
+CHIPSET(0xa7aa, rpl_p, "RPL-P", "Intel(R) Graphics")
+CHIPSET(0xa7ab, rpl_p, "RPL-P", "Intel(R) Graphics")
+CHIPSET(0xa7ac, rpl_p, "RPL-U", "Intel(R) Graphics")
+CHIPSET(0xa7ad, rpl_p, "RPL-U", "Intel(R) Graphics")
+
+CHIPSET(0x4905, dg1, "DG1", "Intel(R) Iris(R) Xe MAX Graphics")
+CHIPSET(0x4906, dg1, "DG1", "Intel(R) Graphics")
+CHIPSET(0x4907, sg1, "SG1", "Intel(R) Graphics")
+CHIPSET(0x4908, dg1, "DG1", "Intel(R) Iris(R) Xe Graphics")
+CHIPSET(0x4909, dg1, "DG1", "Intel(R) Graphics")
+
+CHIPSET(0x5690, dg2_g10, "DG2", "Intel(R) Arc(tm) A770M Graphics")
+CHIPSET(0x5691, dg2_g10, "DG2", "Intel(R) Arc(tm) A730M Graphics")
+CHIPSET(0x5692, dg2_g10, "DG2", "Intel(R) Arc(tm) A550M Graphics")
+CHIPSET(0x5693, dg2_g11, "DG2", "Intel(R) Arc(tm) A370M Graphics")
+CHIPSET(0x5694, dg2_g11, "DG2", "Intel(R) Arc(tm) A350M Graphics")
+CHIPSET(0x5695, dg2_g11, "DG2", "Intel(R) Graphics")
+CHIPSET(0x5696, dg2_g12, "DG2", "Intel(R) Arc(tm) A570M Graphics")
+CHIPSET(0x5697, dg2_g12, "DG2", "Intel(R) Arc(tm) A530M Graphics")
+CHIPSET(0x56a0, dg2_g10, "DG2", "Intel(R) Arc(tm) A770 Graphics")
+CHIPSET(0x56a1, dg2_g10, "DG2", "Intel(R) Arc(tm) A750 Graphics")
+CHIPSET(0x56a2, dg2_g10, "DG2", "Intel(R) Arc(tm) A580 Graphics")
+CHIPSET(0x56a3, dg2_g12, "DG2", "Intel(R) Graphics")
+CHIPSET(0x56a4, dg2_g12, "DG2", "Intel(R) Graphics")
+CHIPSET(0x56a5, dg2_g11, "DG2", "Intel(R) Arc(tm) A380 Graphics")
+CHIPSET(0x56a6, dg2_g11, "DG2", "Intel(R) Arc(tm) A310 Graphics")
+CHIPSET(0x56b0, dg2_g11, "DG2", "Intel(R) Arc(tm) Pro A30M Graphics")
+CHIPSET(0x56b1, dg2_g11, "DG2", "Intel(R) Arc(tm) Pro A40/A50 Graphics")
+CHIPSET(0x56b2, dg2_g12, "DG2", "Intel(R) Arc(tm) Pro A60M Graphics")
+CHIPSET(0x56b3, dg2_g12, "DG2", "Intel(R) Arc(tm) Pro A60 Graphics")
+CHIPSET(0x56ba, dg2_g11, "DG2", "Intel(R) Arc(tm) A380E Graphics")
+CHIPSET(0x56bb, dg2_g11, "DG2", "Intel(R) Arc(tm) A310E Graphics")
+CHIPSET(0x56bc, dg2_g11, "DG2", "Intel(R) Arc(tm) A370E Graphics")
+CHIPSET(0x56bd, dg2_g11, "DG2", "Intel(R) Arc(tm) A350E Graphics")
+CHIPSET(0x56be, dg2_g10, "DG2", "Intel(R) Arc(tm) A750E Graphics")
+CHIPSET(0x56bf, dg2_g10, "DG2", "Intel(R) Arc(tm) A580E Graphics")
+CHIPSET(0x56c0, atsm_g10, "ATS-M", "Intel(R) Data Center GPU Flex 170")
+CHIPSET(0x56c1, atsm_g11, "ATS-M", "Intel(R) Data Center GPU Flex 140")
+CHIPSET(0x56c2, atsm_g10, "ATS-M", "Intel(R) Data Center GPU Flex 170V")
+
+CHIPSET(0x6420, lnl, "LNL", "Intel(R) Graphics")
+CHIPSET(0x64a0, lnl, "LNL", "Intel(R) Graphics")
+CHIPSET(0x64b0, lnl, "LNL", "Intel(R) Graphics")
+
+CHIPSET(0x7d40, mtl_u, "MTL", "Intel(R) Graphics")
+CHIPSET(0x7d45, mtl_u, "MTL", "Intel(R) Graphics")
+CHIPSET(0x7d55, mtl_h, "MTL", "Intel(R) Arc(tm) Graphics")
+CHIPSET(0x7d60, mtl_u, "MTL", "Intel(R) Graphics")
+CHIPSET(0x7dd5, mtl_h, "MTL", "Intel(R) Graphics")
+
+CHIPSET(0x7d41, arl_u, "ARL", "Intel(R) Graphics")
+CHIPSET(0x7d51, arl_h, "ARL", "Intel(R) Graphics")
+CHIPSET(0x7d67, arl_u, "ARL", "Intel(R) Graphics")
+CHIPSET(0x7dd1, arl_h, "ARL", "Intel(R) Graphics")
+CHIPSET(0xb640, arl_u, "ARL", "Intel(R) Graphics")
+
+CHIPSET(0xe202, bmg, "BMG G21", "Intel(R) Graphics")
+CHIPSET(0xe20b, bmg, "BMG G21", "Intel(R) Arc(tm) B580 Graphics")
+CHIPSET(0xe20c, bmg, "BMG G21", "Intel(R) Arc(tm) B570 Graphics")
+CHIPSET(0xe20d, bmg, "BMG G21", "Intel(R) Graphics")
+CHIPSET(0xe210, bmg, "BMG G21", "Intel(R) Graphics")
+CHIPSET(0xe211, bmg, "BMG G21", "Intel(R) Arc(tm) Pro B60 Graphics")
+CHIPSET(0xe212, bmg, "BMG G21", "Intel(R) Arc(tm) Pro B50 Graphics")
+CHIPSET(0xe215, bmg, "BMG", "Intel(R) Graphics")
+CHIPSET(0xe216, bmg, "BMG", "Intel(R) Graphics")
+CHIPSET(0xe220, bmg, "BMG G31", "Intel(R) Graphics")
+CHIPSET(0xe221, bmg, "BMG G31", "Intel(R) Graphics")
+CHIPSET(0xe222, bmg, "BMG G31", "Intel(R) Graphics")
+CHIPSET(0xe223, bmg, "BMG G31", "Intel(R) Graphics")
+
 GPU_URLS = ["xpu", "mtl", "lnl", "bmg", "arl"]
 GPU_GENERATION = ["dedicated Alchemist", "integrated Meteor Lake", "integrated Lunar Lake", "dedicated Battlemage", "integrated Arrow Lake"]
 GPU_A_AN = ["a", "an", "an", "a", "an"]
@@ -163,7 +262,18 @@ def get_gpu() -> tuple[int, str]:
                 continue
             gpu_names.append(' '.join(s[2:]))
 
+    # Sometimes clinfo will give the PCI ID as the name, instead of the actual name. Odd.
+    translated_gpu_names = []
+    for gpu_name in gpu_names:
+        ma = re.search(r"(0x[0-9a-f]+)", gpu_name)
+        if ma:
+            newname = PCI_IDS[int(ma[1], 16)]
+            newname = f"{newname[2]} (PCI ID {ma[1]}, {newname[1]})"
+        else:
+            newname = gpu_name
 
+        translated_gpu_names.append(newname)
+    gpu_names = translated_gpu_names
 
     for gpu_name in gpu_names: # Alchemist
         ma = re.search(r"Intel\(R\) Arc\(TM\) (A\d{2,5}[A-Z]{0,2})", gpu_name)
