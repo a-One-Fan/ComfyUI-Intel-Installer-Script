@@ -143,7 +143,7 @@ IPEX_INTEGRITY_CHECK = (
     [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
 )
 
-PCI_IDS = {}
+PCI_IDS: dict[int, tuple[int, str, str]] = {}
 
 # For easy copy-pasting
 
@@ -267,8 +267,23 @@ def get_gpu() -> tuple[int, str]:
     for gpu_name in gpu_names:
         ma = re.search(r"(0x[0-9a-f]+)", gpu_name)
         if ma:
-            newname = PCI_IDS[int(ma[1], 16)]
-            newname = f"{newname[2]} (PCI ID {ma[1]}, {newname[1]})"
+            pci = PCI_IDS[int(ma[1], 16)]
+            newname = f"{pci[2]} (PCI ID {ma[1]}, {pci[1]})"
+
+            # A lot of GPUs have the same name "Intel(R) Graphics", mostly iGPUs but not only.
+            # So, detect by ID directly.
+            if (pci[1].find("DG2") != -1) or (pci[1].find("ATS-M") != -1):
+                return 0, pci[2], newname
+            if pci[1].find("BMG") != -1:
+                return 3, pci[2], newname
+            
+            if pci[1].find("LNL") != -1:
+                return 2, pci[2], newname
+            if pci[1].find("ARL") != -1:
+                return 4, pci[2], newname
+            if pci[1].find("MTL") != -1:
+                return 1, pci[2], newname
+
         else:
             newname = gpu_name
 
