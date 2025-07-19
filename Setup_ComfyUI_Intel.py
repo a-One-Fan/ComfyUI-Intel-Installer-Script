@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.2.1p"
+version = "0.2.2p"
 
 import os
 import re
@@ -700,15 +700,16 @@ try:
         ("Set up kohya_ss", "Download kohya_ss and install dependencies and other things needed to run on Intel Arc")
     )
 
-    REPO_NAMES = ["ComfyUI", "aa", "kohya_ss"]
+    CHOSEN_INSTALL_COMFY = 0
+    CHOSEN_INSTALL_KOHYA = 2
+    CHOSEN_INSTALL_DOWNLOAD = 1
 
-    START_SCRIPT_NAMES = ["start_lowvram", "aa", "start_kohya_gui"]
-    SHORTCUT_NAMES = ["ComfyUI", "aa", "Kohya_ss"]
+    REPO_NAMES = ["ComfyUI", "aa", "kohya_ss"]
 
     chosen_install = promptForChoice("---", "What to do?", choices, 0)
     #chosen_install = 0
 
-    if (chosen_install in [0, 2]):
+    if (chosen_install in [CHOSEN_INSTALL_COMFY, CHOSEN_INSTALL_KOHYA]):
         ####################################
         #         Install ComfyUI          #
         ####################################
@@ -742,10 +743,15 @@ try:
         printColored(gpu_text[1], "Cyan", False)
         printColored(f" {gpu_text[2]},\nand using Conda at ", "Default", False)
         printColored(os.path.join(condapath, ''), "Cyan", False)
+
         scripttype = "batch" if IS_WINDOWS else "shell"
-        maybe_vram = repo if chosen_install != 0 else f"{repo} (with --lowvram)"
-        print(f",\nas well as containing 1 {scripttype} script - used to launch {maybe_vram},")
-        print("and a shortcut to it outside the folder.")
+        scriptcount = 2 if chosen_install == CHOSEN_INSTALL_COMFY else 1
+        sscripts = "s" if scriptcount > 1 else ""
+        sshortcuts = "shortcuts" if scriptcount > 1 else "a shortcut"
+        itthem = "them" if scriptcount > 1 else "it"
+
+        print(f",\nas well as containing {scriptcount} {scripttype} script{sscripts} - used to launch {repo},")
+        print(f"and {sshortcuts} to {itthem} outside the folder.")
         print("\nContinue?")
         c = promptForChoice("", "", ("Yes", "No"))
         if(c):
@@ -754,7 +760,7 @@ try:
         if not os.path.isdir(FOLDERNAME): os.mkdir(FOLDERNAME)
         os.chdir(FOLDERNAME)
 
-        if chosen_install == 0:
+        if chosen_install == CHOSEN_INSTALL_COMFY:
 
             class custom_node:
                 Name: str
@@ -776,8 +782,9 @@ try:
                 custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
                 custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
                 custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
-                custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
-                #custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes abd UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
+                #custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
+                custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes and UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
+                custom_node(Name="Teacache",        Description = "Speedup for heavier models like Flux",                           link="https://github.com/welltop-cn/ComfyUI-TeaCache"),
             ]
             custom_nodes_info_2 = (
                 custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
@@ -839,7 +846,7 @@ try:
         conda.pipinstall(f" -r requirements.txt")
         conda.do(f"cd ..")
 
-        if (chosen_install == 0):
+        if (chosen_install == CHOSEN_INSTALL_COMFY):
             if (chosen_custom_nodes > 0):
                 os.chdir("./ComfyUI/custom_nodes")
                 for cn in custom_nodes_info:
@@ -862,49 +869,53 @@ try:
 
         ipex_install(conda, gpu_id, chosen_ipex)
 
-        if (chosen_install == 0):
+        if (chosen_install == CHOSEN_INSTALL_COMFY):
             conda.pipinstall("onnxruntime-openvino")
             if (chosen_custom_nodes > 1):
                 conda.pipinstall("\"git+https://github.com/facebookresearch/pytorch3d.git\"")
         
-        start_script_filename = START_SCRIPT_NAMES[chosen_install] + (".bat" if IS_WINDOWS else ".sh")
-
-        sleco = get_slicing_env_conda(gpu_id, chosen_ipex, condapath)
-
-        start_script_content = sleco + "\n" + "cd ./" + REPO_NAMES[chosen_install] + "\n"
-
-        if chosen_install == 0:
-            start_script_content += "python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"
-        else:
-            start_script_content += "python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify"
-
-        f = open(start_script_filename, 'w')
-        f.write(start_script_content)
-        f.close()
+        #"python ./main.py --bf16-unet --disable-ipex-optimize --lowvram"
+        #"python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify"
+        def make_script_and_shortcut(command: str, script_name: str, shortcut_name: str | None = None):
+            if shortcut_name == None:
+                shortcut_name = script_name
+            start_script_filename = script_name + (".bat" if IS_WINDOWS else ".sh")
+            sleco = get_slicing_env_conda(gpu_id, chosen_ipex, condapath)
+            start_script_content = sleco + "\n" + "cd ./" + REPO_NAMES[chosen_install] + "\n"
+            start_script_content += command
+            f = open(start_script_filename, 'w')
+            f.write(start_script_content)
+            f.close()
         
-        
-        # Shortcut
-        if IS_WINDOWS:
-            retc = makeShortcut(f"{base_path}\\{SHORTCUT_NAMES[chosen_install]}.lnk", CMD, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_script_filename}`\"", "shell32.dll", 14)
-            if retc != 0:
-                print(f"An error ocurred when creating shortcut ({retc}).")
-                raise SkipErrorPrintException
-        else:
-            makeShortcut(f"{base_path}/{SHORTCUT_NAMES[chosen_install]}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg", REPO_NAMES[chosen_install])
+            if IS_WINDOWS:
+                retc = makeShortcut(f"{base_path}\\{shortcut_name}.lnk", CMD, f"/K `\"{base_path}\\{FOLDERNAME}\\{start_script_filename}`\"", "shell32.dll", 14)
+                if retc != 0:
+                    print(f"An error ocurred when creating shortcut ({retc}).")
+                    raise SkipErrorPrintException
+            else:
+                makeShortcut(f"{base_path}/{shortcut_name}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg", REPO_NAMES[chosen_install])
+
+        if chosen_install == CHOSEN_INSTALL_COMFY:
+            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --lowvram", "start_lowvram", "ComfyUI")
+            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --lowvram --reserve-vram 11", "start_lowervram", "ComfyUI_Lowervram")
+        elif chosen_install == CHOSEN_INSTALL_KOHYA:
+            make_script_and_shortcut("python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify", "start_kohya", "Kohya_ss")
 
         conda.do("pip list > env.txt")
 
         conda.end()
         print("", flush=True)
 
-        if (chosen_install == 0 and chosen_custom_nodes > 0):
-            print("Applying SUPIR fixes...")
+        if (chosen_install == CHOSEN_INSTALL_COMFY and chosen_custom_nodes > 0):
+            print("Applying SUPIR and Tiled Ksampler fixes...")
             site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
             replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
+            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.float().to(model.device)", "hint.float().to(model.control_model.device)")
+            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.to(model.control_model.dtype).to(model.device)", "hint.to(model.control_model.dtype).to(model.control_model.device)")
             print("Done.")
 
-        if (chosen_install == 0 and chosen_custom_nodes > 1):
+        if (chosen_install == CHOSEN_INSTALL_COMFY and chosen_custom_nodes > 1):
             print("Finalizing 3D pack setup...")
 
 
@@ -930,7 +941,7 @@ try:
         printColored(f"{REPO_NAMES[chosen_install]} is set up. Press enter to continue.\n", "Green")
     
 
-    elif(chosen_install == 1):
+    elif(chosen_install == CHOSEN_INSTALL_DOWNLOAD):
         ##################################
         #        Download a model        #
         ##################################
@@ -986,6 +997,11 @@ try:
         fluxdev4b_u =       DownloadableFile("https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q4_0.gguf", 6632, "unet")
         fluxschnell4b_u =   DownloadableFile("https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_0.gguf", 6632, "unet")
 
+        fluxfillq4_u =   DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q4_0.gguf", 6810, "unet")
+        fluxfillq8_u =   DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q8_0.gguf", 12700, "unet")
+        fluxkontextq4_u =   DownloadableFile("https://huggingface.co/QuantStack/FLUX.1-Kontext-dev-GGUF/resolve/main/flux1-kontext-dev-Q4_0.gguf", 6800, "unet")
+        fluxkontextq8_u =   DownloadableFile("https://huggingface.co/bullerwins/FLUX.1-Kontext-dev-GGUF/resolve/main/flux1-kontext-dev-Q8_0.gguf", 12700, "unet")
+
         sdxl_10_sft =       DownloadableFile("https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors", 6775)
         jugxl_v9_rdp2_sft = DownloadableFile("https://huggingface.co/RunDiffusion/Juggernaut-XL-v9/resolve/main/Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors", 6775)
         jugxl_rdp2li_sft =  DownloadableFile("https://huggingface.co/RunDiffusion/Juggernaut-XL-Lightning/resolve/main/Juggernaut_RunDiffusionPhoto2_Lightning_4Steps.safetensors", 7634)
@@ -1031,8 +1047,12 @@ try:
         animagine_4_opt =   DownloadableCollection([animagine_4_o_sft], "Animagine XL 4.0 Opt")
         animagine_4_zero =  DownloadableCollection([animagine_4_z_sft], "Animagine XL 4.0 Zero")
         noobai_vpred_1_0 =  DownloadableCollection([nai_vpred_1_0_sft], "NoobAI Vpred 1.0")
-        fluxdev8bit =       DownloadableCollection([ae, t5_8, clip_l, fluxdev8b_u], "Flux.1 Dev 8-bit", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
-        fluxschnell8bit =   DownloadableCollection([ae, t5_8, clip_l, fluxschnell8b_u], "Flux.1 Schnell 8-bit")
+        fluxdev8bit =       DownloadableCollection([ae, t5_8, clip_l, fluxdev8b_u], "Flux.1 Dev FP8", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
+        fluxschnell8bit =   DownloadableCollection([ae, t5_8, clip_l, fluxschnell8b_u], "Flux.1 Schnell FP8")
+        fluxkontext8bit =   DownloadableCollection([ae, t5_8, clip_l, fluxkontextq8_u], "Flux.1 Kontext Q8_0", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
+        fluxkontext4bit =   DownloadableCollection([ae, t5_8, clip_l, fluxkontextq4_u], "FLux.1 Kontext Q4_0", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
+        fluxfill8bit =      DownloadableCollection([ae, t5_8, clip_l, fluxfillq8_u], "Flux.1 Fill Q8_0", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
+        fluxfill4bit =      DownloadableCollection([ae, t5_8, clip_l, fluxfillq4_u], "Flux.1 Fill Q4_0", "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md")
         pixart_sigma =      DownloadableCollection([sdxl_vae_10, t5_8, pixart_sigma_base], "Pixart Sigma")
         dreamshaper_8 =     DownloadableCollection([dreamshaper_8_ba], "Dreamshaper 8 (SD1.5)")
         dreamshaper_8_inp = DownloadableCollection([drmsh8r_8_inp_ba], "Dreamshaper 8 Inpainting (SD1.5)")
@@ -1040,7 +1060,7 @@ try:
 
         collections = [fluxdev4bit, fluxschnell4bit, supir, powerpaint, brushnet_15, brushnet_xl, sdxl_10, jugxl_v9_rdp2, 
                        jugxl_v9_rdp2_li, jugxl_v2, animagine_31, animagine_4_opt, animagine_4_zero, noobai_vpred_1_0, pixart_sigma, 
-                       fluxdev8bit, fluxschnell8bit, dreamshaper_8, dreamshaper_8_inp, clip_finetunes]
+                       fluxdev8bit, fluxschnell8bit, fluxkontext8bit, fluxkontext4bit, fluxfill8bit, fluxfill4bit, dreamshaper_8, dreamshaper_8_inp, clip_finetunes]
 
         os.chdir(FOLDERNAME)
 
