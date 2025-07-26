@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.2.2p"
+version = "0.2.3p"
 
 import os
 import re
@@ -382,18 +382,29 @@ def readShortcut(path: str) -> str:
     #$condapath = $conda_cmd_shortcut.Matches[0].Groups[1]
     return ""
 
-def replaceTextInFile(filepath: str, orig: str, new: str):
+def replaceTextInFile(filepath: str, orig: str, new: str, regex: bool=False):
     f = open(filepath, "r")
     file_string = ""
     for line in f:
         file_string += line
     f.close()
-    loc = file_string.find(orig)
+    if not regex:
+        loc = file_string.find(orig)
+        origlen = len(orig)
+    else:
+        loc = -1
+        re_res = re.search(orig, file_string)
+        if re_res:
+            loc = re_res.span()[0]
+            origlen = re_res.span()[1] - re_res.span()[0]
     if loc != -1:
-        new_file_string = file_string[:loc] + new + file_string[loc+len(orig):]
+        new_file_string = file_string[:loc] + new + file_string[loc+origlen:]
         f = open(filepath, "w")
         f.write(new_file_string)
         f.close()
+        print(f"Replaced text \"{orig}\" with \"{new}\" in file \"{filepath}\"")
+    else:
+        print(f"Could not find text \"{orig}\" in file \"{filepath}\", not replacing anything")
 
 class PFCType:
     Key: str
@@ -817,18 +828,18 @@ try:
             elif chosen_ipex == 2:
                 import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
-    import intel_extension_for_pytorch as ipex#
+    import intel_extension_for_pytorch as ipex  # noqa: F401#
     ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
     transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
             else:
-                import_ipex_code = """import intel_extension_for_pytorch as ipex#
+                import_ipex_code = """import intel_extension_for_pytorch as ipex  # noqa: F401#
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
-            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex\n", import_ipex_code)
+            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
             replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             os.chdir("../..")
         else:
@@ -937,7 +948,11 @@ try:
 
 
         if (not IS_WINDOWS):
-            printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/{start_script_filename}  !", "Yellow")
+            if chosen_install == CHOSEN_INSTALL_COMFY:
+                printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/start_lowvram.sh  \nand then    chmod 0777 ./Comfy_Intel/start_lowervram.sh   !", "Yellow")
+            elif chosen_install == CHOSEN_INSTALL_KOHYA:
+                printColored(f"\nYou may need to  chmod 0777 ./Comfy_Intel/start_kohya.sh   !", "Yellow")
+            # TODO: If more options in the future, listify this ^
         printColored(f"{REPO_NAMES[chosen_install]} is set up. Press enter to continue.\n", "Green")
     
 
@@ -997,8 +1012,8 @@ try:
         fluxdev4b_u =       DownloadableFile("https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q4_0.gguf", 6632, "unet")
         fluxschnell4b_u =   DownloadableFile("https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q4_0.gguf", 6632, "unet")
 
-        fluxfillq4_u =   DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q4_0.gguf", 6810, "unet")
-        fluxfillq8_u =   DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q8_0.gguf", 12700, "unet")
+        fluxfillq4_u =      DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q4_0.gguf", 6810, "unet")
+        fluxfillq8_u =      DownloadableFile("https://huggingface.co/YarvixPA/FLUX.1-Fill-dev-GGUF/resolve/main/flux1-fill-dev-Q8_0.gguf", 12700, "unet")
         fluxkontextq4_u =   DownloadableFile("https://huggingface.co/QuantStack/FLUX.1-Kontext-dev-GGUF/resolve/main/flux1-kontext-dev-Q4_0.gguf", 6800, "unet")
         fluxkontextq8_u =   DownloadableFile("https://huggingface.co/bullerwins/FLUX.1-Kontext-dev-GGUF/resolve/main/flux1-kontext-dev-Q8_0.gguf", 12700, "unet")
 
