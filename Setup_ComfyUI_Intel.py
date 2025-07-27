@@ -818,7 +818,7 @@ try:
             # ComfyUI, hijacks
             clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
             os.chdir("./ComfyUI/comfy")
-            clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
+            #clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
             print("Applying Disty's hijacks (thanks!)")
             if chosen_ipex >= 3:
                 import_ipex_code = """from ipex_to_cuda import ipex_init
@@ -858,6 +858,7 @@ try:
         conda.do(f"cd ..")
 
         if (chosen_install == CHOSEN_INSTALL_COMFY):
+            conda.pipinstall("--force-reinstall git+https://github.com/Disty0/ipex_to_cuda")
             if (chosen_custom_nodes > 0):
                 os.chdir("./ComfyUI/custom_nodes")
                 for cn in custom_nodes_info:
