@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.2.3p"
+version = "0.2.4p"
 
 import os
 import re
@@ -109,6 +109,11 @@ class Conda:
             conda_init = LINUX_CONDA_SPAM(condapath)
             self.do(conda_init)
             self.do("conda init bash")
+        
+        if IS_WINDOWS:
+            self.do("set CONDA_PLUGINS_AUTO_ACCEPT_TOS=true")
+        else:
+            self.do("export CONDA_PLUGINS_AUTO_ACCEPT_TOS=true")
 
     def do(self, command: str):
         self.p.stdin.write(("echo " + command + "\n").encode())
