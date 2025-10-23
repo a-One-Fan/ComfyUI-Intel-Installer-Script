@@ -815,12 +815,12 @@ try:
             
             print("Would you like to install all of the following custom nodes:\n")
             formatTable(custom_nodes_info, ("Name", "Description"))
-            print("\nAnd optionally:\n")
-            printColored("EXPERIMENTAL!!!", "Red")
-            formatTable(custom_nodes_info_2, ("Name", "Description"))
+            #print("\nAnd optionally:\n")
+            #printColored("EXPERIMENTAL!!!", "Red")
+            #formatTable(custom_nodes_info_2, ("Name", "Description"))
             print("\nNote: Some of these require additional models to function, which you can download using this script after installing.")
 
-            chosen_custom_nodes = promptForChoice("", "", ("No", "Yes", "3D"), 0)
+            chosen_custom_nodes = promptForChoice("", "", ("No", "Yes", ), 0)
 
             if chosen_custom_nodes > 1:
                 custom_nodes_info.extend(custom_nodes_info_2)
