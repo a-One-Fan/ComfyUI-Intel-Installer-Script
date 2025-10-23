@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.2.4p"
+version = "0.2.4.1p"
 
 import os
 import re
@@ -319,6 +319,11 @@ def get_gpu() -> tuple[int, str]:
         ma = re.search(r"Intel\(R\) Arc\(TM\) (1\d{1,4}T)", gpu_name, re.IGNORECASE)
         if ma:
             return 4, ma[1], gpu_name
+        
+        # Arrow Lake 2
+        ma = re.search(r"Intel\(R\) Graphics", gpu_name, re.IGNORECASE)
+        if ma:
+            return 4, "GPU", gpu_name
     
         # Meteor Lake
         ma = re.search(r"Intel\(R\) Arc\(TM\) Graphics", gpu_name, re.IGNORECASE)
