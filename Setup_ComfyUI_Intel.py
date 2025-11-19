@@ -2,7 +2,7 @@
 condapath = "replace this text with your conda directory"
 # Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
 
-version = "0.2.4.2p"
+version = "0.2.4.3p"
 
 import os
 import re
@@ -653,14 +653,14 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
 
     elif chosen_ipex == 2:
         if IS_WINDOWS:
-            conda.pipinstall(f"torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
+            conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
         else:
             conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
     
     elif chosen_ipex == 1:
         if IS_WINDOWS:
-            conda.pipinstall(f"torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
+            conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                     --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
 
             conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
@@ -668,7 +668,7 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
             conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
     
     elif chosen_ipex == 0:
-        conda.pipinstall(f"torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
+        conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
                     --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
         conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
     
