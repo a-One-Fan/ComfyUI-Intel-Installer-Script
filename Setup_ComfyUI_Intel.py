@@ -1,8 +1,10 @@
 
 condapath = "replace this text with your conda directory"
-# Contains folders like "Scripts" and "shell", path does not end with / or \ (\\) 
+# Contains folders like "Scripts" and "shell", path does not end with / or \\
+# Please do not include single \ backwards slashes
+# Use \\ in place of \, or use /
 
-version = "0.2.4.3p"
+version = "0.2.5p"
 
 import os
 import re
@@ -19,7 +21,7 @@ CMD = "C:\\Windows\\System32\\cmd.exe"
 SHELL = "/bin/bash"
 if IS_WINDOWS: # sys.getdefaultencoding AND sys.getfilesystemencoding just blanket return utf-8
     chcp = subprocess.check_output("chcp", shell=True)
-    TEXT_ENCODING = str(int(chcp[chcp.rfind(b' ')+1:-2]))
+    TEXT_ENCODING = "cp" + str(int(chcp[chcp.rfind(b' ')+1:-2]))
 else:
     TEXT_ENCODING = sys.getdefaultencoding()
 
@@ -130,22 +132,31 @@ class Conda:
         self.print_thread.join()
         self.print_err_thread.join()
 
+IPEX_21_STR = "0"
+IPEX_23_STR = "1"
+IPEX_25_STR = "2"
+IPEX_28_STR = "3"
+IPEX_STABLE_STR = "4"
+IPEX_NIGHTLY_STR = "5"
+
 ALL_IPEX_CHOICES = (
-        ("2.1.40+IPEX", "Legacy version", "0"),
-        ("2.3.110+IPEX", "Much faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", "1"),
-        ("2.5+IPEX", "Significantly slower than 2.3, better compatibility (e.g. Stable Cascade works)", "2"),
-        ("Stable", "Recommended version", "3"),
-        ("Nightly", "Experimental, 2.3 speeds", "4")
+        ("2.1.40+IPEX", "Legacy version", IPEX_21_STR),
+        ("2.3.110+IPEX", "Legacy version. Faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", IPEX_23_STR),
+        ("2.5+IPEX", "Legacy version. Slow, not generally recommended.", IPEX_25_STR),
+        ("2.8", "Recommended version for Battlemage users", IPEX_28_STR),
+        ("Stable", "Currently produces black images on Battlemage GPUs", IPEX_STABLE_STR),
+        ("Nightly", "Experimental, fastest", IPEX_NIGHTLY_STR),
     )
 
 INTEGRITY_CHECK_DEVICE = "_DEVICE_"
 
 IPEX_INTEGRITY_CHECK = (
-    [],
-    [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"],
-    [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"],
-    [r"torch\s+[23]\.\d+\.\d+\+xpu"], # torch\s+2\.6\.0\+xpu official pytorch seems to always be called "xpu"
-    [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"],
+    [], # 2.1.4
+    [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"], # 2.3.110
+    [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"], # 2.5+IPEX
+    [r"torch\s+[23]\.\d+\.\d+\+xpu"], # 2.8
+    [r"torch\s+[23]\.\d+\.\d+\+xpu"], # Stable
+    [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"], # Nightly
 )
 
 PCI_IDS: dict[int, tuple[int, str, str]] = {}
@@ -633,7 +644,12 @@ def ipex_pre(gpu_id):
     else:
         ipex_choices = ALL_IPEX_CHOICES[2:]
 
-    chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, len(ipex_choices) - 2)
+    if gpu_id > 3:
+        default_choice = 3 # TODO temp: Battlemage has bug producing black images, needs 2.8
+    else:
+        default_choice = len(ipex_choices) - 2
+
+    chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, default_choice)
     chosen_ipex = int(ipex_choices[chosen_ipex][2])
 
     gpu_text = [GPU_A_AN[gpu_id], GPU_GENERATION[gpu_id], gpu_short_name]
@@ -643,22 +659,26 @@ def ipex_pre(gpu_id):
 def ipex_install(conda: Conda, gpu_id, chosen_ipex):
     url = GPU_URLS[gpu_id]
     COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
-    if chosen_ipex == 4:
+    if chosen_ipex == int(IPEX_NIGHTLY_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
         conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
 
-    if chosen_ipex == 3:
+    elif chosen_ipex == int(IPEX_STABLE_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
         conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
 
-    elif chosen_ipex == 2:
+    elif chosen_ipex == int(IPEX_28_STR):
+        conda.do("pip uninstall intel_extension_for_pytorch -y")
+        conda.pipinstall("--force-reinstall torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/xpu")
+
+    elif chosen_ipex == int(IPEX_25_STR):
         if IS_WINDOWS:
             conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.5.1+cxx11.abi torchvision==0.20.1+cxx11.abi torchaudio==2.5.1+cxx11.abi intel-extension-for-pytorch==2.5.10+xpu \
                         --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
         else:
             conda.do("conda install intel-extension-for-pytorch=2.5.10 pytorch=2.5.1 torchvision==0.20.1 torchaudio==2.5.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
     
-    elif chosen_ipex == 1:
+    elif chosen_ipex == int(IPEX_23_STR):
         if IS_WINDOWS:
             conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu \
                     --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
@@ -667,7 +687,7 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
         else:
             conda.do("conda install intel-extension-for-pytorch=2.3.110 pytorch=2.3.1 torchvision==0.18.1 torchaudio==2.3.1 -c https://software.repos.intel.com/python/conda -c conda-forge -y")
     
-    elif chosen_ipex == 0:
+    elif chosen_ipex == int(IPEX_21_STR):
         conda.pipinstall(f"--trusted-host pytorch-extension.intel.com torch==2.1.0.post3 torchvision==0.16.0.post3 torchaudio==2.1.0.post3 intel-extension-for-pytorch==2.1.40+xpu \
                     --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/{url}/{COUNTRY}/")
         conda.pipinstall("dpcpp-cpp-rt==2024.2.1 mkl-dpcpp==2024.2.1 onednn==2024.2.1")
@@ -830,12 +850,12 @@ try:
             os.chdir("./ComfyUI/comfy")
             #clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
             print("Applying Disty's hijacks (thanks!)")
-            if chosen_ipex >= 3:
+            if chosen_ipex >= int(IPEX_28_STR):
                 import_ipex_code = """from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
 
-            elif chosen_ipex == 2:
+            elif chosen_ipex == int(IPEX_25_STR):
                 import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex  # noqa: F401#
