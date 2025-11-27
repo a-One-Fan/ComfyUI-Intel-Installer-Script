@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.5p"
+version = "0.2.6p"
 
 import os
 import re
@@ -13,12 +13,14 @@ import urllib.request as req
 import traceback
 import threading
 import sys
+import requests
 
 IS_WINDOWS = os.name == "nt"
 
 POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
 CMD = "C:\\Windows\\System32\\cmd.exe"
 SHELL = "/bin/bash"
+ONE_BRANCH_LINK = "https://raw.githubusercontent.com/a-One-Fan/ComfyUI-Intel-Installer-Script/refs/heads/one/Setup_ComfyUI_Intel.py"
 if IS_WINDOWS: # sys.getdefaultencoding AND sys.getfilesystemencoding just blanket return utf-8
     chcp = subprocess.check_output("chcp", shell=True)
     TEXT_ENCODING = "cp" + str(int(chcp[chcp.rfind(b' ')+1:-2]))
@@ -92,6 +94,17 @@ def print_stdout(p):
 def print_stderr(p):
     for line in iter(p.stderr.readline, b''):
         print(line.decode(TEXT_ENCODING, errors='replace'), end='')
+
+def get_github_version():
+    try:
+        res = requests.get(ONE_BRANCH_LINK)
+        lines = res.text.split("\n")
+        for i in range(30): # version is somewhere around line 0-30
+            m = re.search(r"version = \"([^\"]+)\"", lines[i])
+            if m:
+                return m[1]
+    except Exception as e:
+        return ""
 
 #TODO better ctr+c/z/sigterm/sigkill handling?
 class Conda:
@@ -645,7 +658,7 @@ def ipex_pre(gpu_id):
         ipex_choices = ALL_IPEX_CHOICES[2:]
 
     if gpu_id > 3:
-        default_choice = 3 # TODO temp: Battlemage has bug producing black images, needs 2.8
+        default_choice = len(ipex_choices) - 3 # TODO temp: Battlemage has bug producing black images, needs 2.8
     else:
         default_choice = len(ipex_choices) - 2
 
@@ -701,7 +714,19 @@ class SkipErrorPrintException(Exception):
     pass
 
 try:
-    printColored(f"Script version: {version}", "DarkGreen")
+    latest_version = get_github_version()
+
+    if not latest_version:
+        print(f"Script version: {version}")
+        printColored(f"Could not fetch latest version...", "Yellow")
+    else:
+        if latest_version[:-1] > version[:-1]:
+            printColored(f"Script version: {version}", "Yellow")
+            printColored(f"Latest version: {latest_version}", "DarkGreen")
+            print("Consider updating.\n")
+        else:
+            printColored(f"Script version: {version} (latest {latest_version})", "DarkGreen")
+
     print("Loading...")
     # clinfo
     if not IS_WINDOWS:
