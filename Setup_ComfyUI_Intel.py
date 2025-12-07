@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.6p"
+version = "0.2.6.1p"
 
 import os
 import re
@@ -13,7 +13,6 @@ import urllib.request as req
 import traceback
 import threading
 import sys
-import requests
 
 IS_WINDOWS = os.name == "nt"
 
@@ -97,8 +96,12 @@ def print_stderr(p):
 
 def get_github_version():
     try:
-        res = requests.get(ONE_BRANCH_LINK)
-        lines = res.text.split("\n")
+        opener = req.build_opener()
+        opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+        req.install_opener(opener)
+        res = req.urlopen(ONE_BRANCH_LINK)
+        res = res.read().decode()
+        lines = res.split("\n")
         for i in range(30): # version is somewhere around line 0-30
             m = re.search(r"version = \"([^\"]+)\"", lines[i])
             if m:
