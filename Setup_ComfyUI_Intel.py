@@ -170,7 +170,7 @@ IPEX_INTEGRITY_CHECK = (
     [], # 2.1.4
     [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"], # 2.3.110
     [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"], # 2.5+IPEX
-    [r"torch\s+[23]\.\d+\.\d+\+xpu"], # 2.8
+    [r"torch\s+2\.8\.\d+\+xpu"], # 2.8
     [r"torch\s+[23]\.\d+\.\d+\+xpu"], # Stable
     [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"], # Nightly
 )
@@ -661,9 +661,9 @@ def ipex_pre(gpu_id):
         ipex_choices = ALL_IPEX_CHOICES[2:]
 
     if gpu_id > 3:
-        default_choice = len(ipex_choices) - 3 # TODO temp: Battlemage has bug producing black images, needs 2.8
-    else:
         default_choice = len(ipex_choices) - 2
+    else:
+        default_choice = len(ipex_choices) - 3 # TODO temp: Now Alchemist has an unfixed critical bug with 2.10. Amazing.
 
     chosen_ipex = promptForChoice(" ", "Choose a Pytorch Version", ipex_choices, default_choice)
     chosen_ipex = int(ipex_choices[chosen_ipex][2])
@@ -1003,7 +1003,7 @@ try:
                 print("Environment:")
                 print(env)
                 printColored(f"One or more packages have failed to download: {check}", "Red")
-                printColored("Please run the script again and ensure your internet connection is working.", "Yellow")
+                printColored("Please run the script again and ensure your internet connection is working and you have enough free space.", "Yellow")
                 raise SkipErrorPrintException
         print(f"All {len(IPEX_INTEGRITY_CHECK[chosen_ipex])} integrity checks passed.")
 
