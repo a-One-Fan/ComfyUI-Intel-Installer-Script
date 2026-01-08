@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.6.1p"
+version = "0.2.6.2p"
 
 import os
 import re
@@ -151,7 +151,7 @@ class Conda:
 IPEX_21_STR = "0"
 IPEX_23_STR = "1"
 IPEX_25_STR = "2"
-IPEX_28_STR = "3"
+IPEX_29_STR = "3"
 IPEX_STABLE_STR = "4"
 IPEX_NIGHTLY_STR = "5"
 
@@ -159,8 +159,8 @@ ALL_IPEX_CHOICES = (
         ("2.1.40+IPEX", "Legacy version", IPEX_21_STR),
         ("2.3.110+IPEX", "Legacy version. Faster than 2.5, worse compatibility (e.g. Stable Cascade does not work)", IPEX_23_STR),
         ("2.5+IPEX", "Legacy version. Slow, not generally recommended.", IPEX_25_STR),
-        ("2.8", "Recommended version for Battlemage users", IPEX_28_STR),
-        ("Stable", "Currently produces black images on Battlemage GPUs", IPEX_STABLE_STR),
+        ("2.9", "Recommended version for Alchemist GPUs", IPEX_29_STR),
+        ("Stable", "2.10 currently breaks with Alchemist GPUs", IPEX_STABLE_STR),
         ("Nightly", "Experimental, fastest", IPEX_NIGHTLY_STR),
     )
 
@@ -170,7 +170,7 @@ IPEX_INTEGRITY_CHECK = (
     [], # 2.1.4
     [r"intel_extension_for_pytorch\s+2\.3\.110\+xpu", r"torch\s+2\.3\.1\+cxx11\.abi"], # 2.3.110
     [r"intel_extension_for_pytorch\s+2\.5\.10\+xpu", r"torch\s+2\.5\.1\+cxx11\.abi"], # 2.5+IPEX
-    [r"torch\s+2\.8\.\d+\+xpu"], # 2.8
+    [r"torch\s+2\.9\.\d+\+xpu"], # 2.9
     [r"torch\s+[23]\.\d+\.\d+\+xpu"], # Stable
     [r"torch\s+[23]\.\d+\.\d+(?:.+(?:dev|pre|post).+)?\+xpu"], # Nightly
 )
@@ -683,9 +683,9 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
         conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
 
-    elif chosen_ipex == int(IPEX_28_STR):
+    elif chosen_ipex == int(IPEX_29_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
-        conda.pipinstall("--force-reinstall torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/xpu")
+        conda.pipinstall("--force-reinstall torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/xpu")
 
     elif chosen_ipex == int(IPEX_25_STR):
         if IS_WINDOWS:
@@ -878,7 +878,7 @@ try:
             os.chdir("./ComfyUI/comfy")
             #clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
             print("Applying Disty's hijacks (thanks!)")
-            if chosen_ipex >= int(IPEX_28_STR):
+            if chosen_ipex >= int(IPEX_29_STR):
                 import_ipex_code = """from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
@@ -969,7 +969,7 @@ try:
 
         if chosen_install == CHOSEN_INSTALL_COMFY:
             make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --lowvram", "start_lowvram", "ComfyUI")
-            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --lowvram --reserve-vram 11", "start_lowervram", "ComfyUI_Lowervram")
+            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --reserve-vram 7", "start_lowervram", "ComfyUI_Lowervram")
         elif chosen_install == CHOSEN_INSTALL_KOHYA:
             make_script_and_shortcut("python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify", "start_kohya", "Kohya_ss")
 
