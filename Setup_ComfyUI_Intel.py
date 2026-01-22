@@ -660,7 +660,7 @@ def ipex_pre(gpu_id):
     else:
         ipex_choices = ALL_IPEX_CHOICES[2:]
 
-    if gpu_id > 3:
+    if gpu_id >= 3:
         default_choice = len(ipex_choices) - 2
     else:
         default_choice = len(ipex_choices) - 3 # TODO temp: Now Alchemist has an unfixed critical bug with 2.10. Amazing.
