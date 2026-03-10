@@ -897,10 +897,11 @@ try:
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
-            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
-            replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
+            #replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
+            #replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             for i in range(2):
-                replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device)", "if not is_device_cpu(tensor.device) or is_intel_xpu()")
+                #replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device)", "if not is_device_cpu(tensor.device) or is_intel_xpu()")
+                pass
             os.chdir("../..")
         else:
             clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
