@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.6.2p"
+version = "0.2.7p"
 
 import os
 import re
@@ -842,18 +842,21 @@ try:
 
             custom_nodes_info = [
                 custom_node(Name="GGUF",            Description = "Flux.1 quantized below 8 bit, for Arc GPUs with <16GB of VRAM",  link="https://github.com/city96/ComfyUI-GGUF"),
-                custom_node(Name="BrushNet",        Description = "More intelligent inpainting, and using any SD1.5/XL model",      link="https://github.com/nullquant/ComfyUI-BrushNet"),
+                #custom_node(Name="BrushNet",        Description = "More intelligent inpainting, and using any SD1.5/XL model",      link="https://github.com/nullquant/ComfyUI-BrushNet"),
+                custom_node(Name="Lanpaint",        Description = "Inpainting with any non-inpaint model",                          link="https://github.com/scraed/LanPaint"),
                 #custom_node(Name="Impact Pack",     Description = "Pack of nodes for object segmentation and dealing with masks",   link="https://github.com/ltdrdata/ComfyUI-Impact-Pack"),
-                custom_node(Name="SUPIR",           Description = "High quality upscaling for realistic images",                    link="https://github.com/kijai/ComfyUI-SUPIR"),
+                #custom_node(Name="SUPIR",           Description = "High quality upscaling for realistic images",                    link="https://github.com/kijai/ComfyUI-SUPIR"),
                 custom_node(Name="KJNodes",         Description = "Various misc. nodes",                                            link="https://github.com/kijai/ComfyUI-KJNodes"),
                 custom_node(Name="rgthree",         Description = "Optimized execution, progressbar and various misc. nodes",       link="https://github.com/rgthree/rgthree-comfy"),
-                custom_node(Name="ExtraModels",     Description = "Allows running additional non-SD models (such as Pixart)",       link="https://github.com/city96/ComfyUI_ExtraModels"),
+                #custom_node(Name="ExtraModels",     Description = "Allows running additional non-SD models (such as Pixart)",       link="https://github.com/city96/ComfyUI_ExtraModels"),
                 custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
                 custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
                 custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
                 #custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
                 custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes and UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
-                custom_node(Name="Teacache",        Description = "Speedup for heavier models like Flux",                           link="https://github.com/welltop-cn/ComfyUI-TeaCache"),
+                #custom_node(Name="Teacache",        Description = "Speedup for heavier models like Flux",                           link="https://github.com/welltop-cn/ComfyUI-TeaCache"),
+                custom_node(Name="Spectrum",        Description = "Speedup for SDXL models/Anima, potentially others",              link="https://github.com/ruwwww/ComfyUI-Spectrum-sdxl"),
+                custom_node(Name="Any Everywhere",  Description = "Node management convenience, plug anything everywhere",          link="https://github.com/chrisgoringe/cg-use-everywhere"),
             ]
             custom_nodes_info_2 = (
                 custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
@@ -876,7 +879,7 @@ try:
             # ComfyUI, hijacks
             clone_or_pull("https://github.com/comfyanonymous/ComfyUI")
             os.chdir("./ComfyUI/comfy")
-            #clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
+            clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
             print("Applying Disty's hijacks (thanks!)")
             if chosen_ipex >= int(IPEX_29_STR):
                 import_ipex_code = """from ipex_to_cuda import ipex_init
@@ -897,11 +900,10 @@ try:
     from ipex_to_cuda import ipex_init
     print(f\"ipex_init: {ipex_init()}\")
 """
-            #replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
-            #replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
+            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
+            replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             for i in range(2):
-                #replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device)", "if not is_device_cpu(tensor.device) or is_intel_xpu()")
-                pass
+                replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device)", "if not is_device_cpu(tensor.device) or is_intel_xpu()")
             os.chdir("../..")
         else:
             clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
@@ -982,8 +984,8 @@ try:
         if (chosen_install == CHOSEN_INSTALL_COMFY and chosen_custom_nodes > 0):
             print("Applying SUPIR and Tiled Ksampler fixes...")
             site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
-            replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)")
-            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
+            replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)") # Formerly SUPIR dependency... I'll keep it
+            #replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.float().to(model.device)", "hint.float().to(model.control_model.device)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.to(model.control_model.dtype).to(model.device)", "hint.to(model.control_model.dtype).to(model.control_model.device)")
             print("Done.")
