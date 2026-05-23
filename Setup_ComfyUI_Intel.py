@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.7p"
+version = "0.2.8p"
 
 import os
 import re
@@ -903,7 +903,7 @@ try:
             replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
             replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
             for i in range(2):
-                replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device)", "if not is_device_cpu(tensor.device) or is_intel_xpu()")
+                replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device):", "if not is_device_cpu(tensor.device) or is_intel_xpu():")
             os.chdir("../..")
         else:
             clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
@@ -971,8 +971,8 @@ try:
                 makeShortcut(f"{base_path}/{shortcut_name}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg", REPO_NAMES[chosen_install])
 
         if chosen_install == CHOSEN_INSTALL_COMFY:
-            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --lowvram", "start_lowvram", "ComfyUI")
-            make_script_and_shortcut("python ./main.py --bf16-unet --disable-ipex-optimize --reserve-vram 7", "start_lowervram", "ComfyUI_Lowervram")
+            make_script_and_shortcut("python ./main.py --bf16-unet --lowvram", "start_lowvram", "ComfyUI")
+            make_script_and_shortcut("python ./main.py --bf16-unet --reserve-vram 7", "start_lowervram", "ComfyUI_Lowervram")
         elif chosen_install == CHOSEN_INSTALL_KOHYA:
             make_script_and_shortcut("python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify", "start_kohya", "Kohya_ss")
 
