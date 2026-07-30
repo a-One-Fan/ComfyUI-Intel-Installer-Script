@@ -4,7 +4,7 @@ condapath = "replace this text with your conda directory"
 # Please do not include single \ backwards slashes
 # Use \\ in place of \, or use /
 
-version = "0.2.8p"
+version = "0.2.9p"
 
 import os
 import re
@@ -362,9 +362,16 @@ def get_gpu() -> tuple[int, str]:
 def gpu_needs_slice(id: int) -> bool:
     return id == 1
 
-def get_slicing_env_conda(gpu_id, chosen_ipex, condapath):
-    if IS_WINDOWS:
+MSVC2022 = "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Auxiliary/Build/vcvars64.bat"
+MSVC2026 = "C:/Program Files/Microsoft Visual Studio/2026/Community/VC/Auxiliary/Build/vcvars64.bat"
 
+def get_slicing_env_conda(gpu_id, chosen_ipex, condapath):
+    activate_vars = ""
+    if IS_WINDOWS:
+        if os.path.exists(MSVC2026):
+            activate_vars = f"call \"{MSVC2026}\"\n"
+        elif os.path.exists(MSVC2022):
+            activate_vars = f"call \"{MSVC2022}\"\n"
         conda = f"""call \"{CONDA_ACTIVATE(condapath)}\"
 cd /D \"%~dp0\"
 call conda activate ./{CENVNAME}"""
@@ -395,7 +402,7 @@ conda activate ./{CENVNAME}"""
         else:
             environment = f"# implement me :( - ipex {ALL_IPEX_CHOICES[chosen_ipex][0]}" #TODO
 
-    return conda + "\n" + slicing + "\n" + environment
+    return activate_vars + conda + "\n" + slicing + "\n" + environment
 
 COLORS = {
     "DarkGreen": "\033[32m",
@@ -420,7 +427,9 @@ def readShortcut(path: str) -> str:
     return ""
 
 def replaceTextInFile(filepath: str, orig: str, new: str, regex: bool=False):
-    f = open(filepath, "r")
+    if not os.path.exists(filepath):
+        print(f"Could not find file \"{filepath}\", not replacing anything")
+    f = open(filepath, "r", encoding="utf-8")
     file_string = ""
     for line in f:
         file_string += line
@@ -436,7 +445,7 @@ def replaceTextInFile(filepath: str, orig: str, new: str, regex: bool=False):
             origlen = re_res.span()[1] - re_res.span()[0]
     if loc != -1:
         new_file_string = file_string[:loc] + new + file_string[loc+origlen:]
-        f = open(filepath, "w")
+        f = open(filepath, "w", encoding="utf-8")
         f.write(new_file_string)
         f.close()
         print(f"Replaced text \"{orig}\" with \"{new}\" in file \"{filepath}\"")
@@ -677,15 +686,15 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
     COUNTRY = "us" #if chosen_ipex < 2 else "cn" # ! US works now... CN sometimes doesn't?
     if chosen_ipex == int(IPEX_NIGHTLY_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
-        conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/xpu")
+        conda.pipinstall("--force-reinstall --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/xpu")
 
     elif chosen_ipex == int(IPEX_STABLE_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
-        conda.pipinstall("--force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/test/xpu")
+        conda.pipinstall("--force-reinstall torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/test/xpu")
 
     elif chosen_ipex == int(IPEX_29_STR):
         conda.do("pip uninstall intel_extension_for_pytorch -y")
-        conda.pipinstall("--force-reinstall torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/xpu")
+        conda.pipinstall("--force-reinstall torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --extra-index-url https://download.pytorch.org/whl/xpu")
 
     elif chosen_ipex == int(IPEX_25_STR):
         if IS_WINDOWS:
@@ -711,7 +720,7 @@ def ipex_install(conda: Conda, gpu_id, chosen_ipex):
     else:
         print(f"Impossible to reach code: {chosen_ipex}")
     
-    conda.pipinstall("numpy==1.26.4") # Necessary, even for kohya.
+    #conda.pipinstall("numpy==1.26.4") # Necessary, even for kohya.
 
 class SkipErrorPrintException(Exception):
     pass
@@ -790,6 +799,10 @@ try:
 
         # TODO: Check for permissions to create shortcut makeShortcut
 
+        if not os.path.exists(MSVC2026) and not os.path.exists(MSVC2022):
+            print("For torch compile to work on Windows, it's recommended to install Visual Studio 2026/2022. Newer (stable) pytorch versions work better with compile, however nightlies can have issues. This script will only look inside the default Program Files install location. You can download Visual Studio from:")
+            print("https://visualstudio.microsoft.com/downloads/\n")
+
         repo = REPO_NAMES[chosen_install]
 
         chosen_ipex, gpu_text = ipex_pre(gpu_id)
@@ -852,11 +865,11 @@ try:
                 custom_node(Name="IPAdapter Plus",  Description = "Image Prompts",                                                  link="https://github.com/cubiq/ComfyUI_IPAdapter_plus"),
                 custom_node(Name="Controlnet aux",  Description = "Additional Controlnet preprocessors",                            link="https://github.com/Fannovel16/comfyui_controlnet_aux"),
                 custom_node(Name="Tiled KSampler",  Description = "KSampler for very large images",                                 link="https://github.com/BlenderNeko/ComfyUI_TiledKSampler"),
-                #custom_node(Name="ComfyUI Manager", Description = "Convenient download and installation of other models and nodes", link="https://github.com/ltdrdata/ComfyUI-Manager"),
                 custom_node(Name="Pysssss scripts", Description = "Play sound node and other misc. nodes and UI additions",         link="https://github.com/pythongosssss/ComfyUI-Custom-Scripts"),
                 #custom_node(Name="Teacache",        Description = "Speedup for heavier models like Flux",                           link="https://github.com/welltop-cn/ComfyUI-TeaCache"),
                 custom_node(Name="Spectrum",        Description = "Speedup for SDXL models/Anima, potentially others",              link="https://github.com/ruwwww/ComfyUI-Spectrum-sdxl"),
                 custom_node(Name="Any Everywhere",  Description = "Node management convenience, plug anything everywhere",          link="https://github.com/chrisgoringe/cg-use-everywhere"),
+                custom_node(Name="Anima CN LLLite", Description = "Controlnets for Anima",                                          link="https://github.com/kohya-ss/ComfyUI-Anima-LLLite"),
             ]
             custom_nodes_info_2 = (
                 custom_node(Name="3D Pack",         Description = "Suite of various 3D-related things",                             link="https://github.com/MrForExample/ComfyUI-3D-Pack"),
@@ -881,36 +894,32 @@ try:
             os.chdir("./ComfyUI/comfy")
             clone_or_pull("https://github.com/Disty0/ipex_to_cuda")
             print("Applying Disty's hijacks (thanks!)")
-            if chosen_ipex >= int(IPEX_29_STR):
-                import_ipex_code = """from ipex_to_cuda import ipex_init
-    print(f\"ipex_init: {ipex_init()}\")
+            if chosen_ipex == int(IPEX_25_STR):
+                import_ipex_code = \
 """
-
-            elif chosen_ipex == int(IPEX_25_STR):
-                import_ipex_code = """import transformers # ipex hijacks transformers and makes it unable to load a model
-    backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
-    import intel_extension_for_pytorch as ipex  # noqa: F401#
-    ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
-    transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
-    from ipex_to_cuda import ipex_init
-    print(f\"ipex_init: {ipex_init()}\")
+import transformers # ipex hijacks transformers and makes it unable to load a model
+backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
+ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
+transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
+from ipex_to_cuda import ipex_init
+print(f\"ipex_init: {ipex_init()}\")
 """
             else:
-                import_ipex_code = """import intel_extension_for_pytorch as ipex  # noqa: F401#
-    from ipex_to_cuda import ipex_init
-    print(f\"ipex_init: {ipex_init()}\")
+                import_ipex_code = \
 """
-            replaceTextInFile("model_management.py", "import intel_extension_for_pytorch as ipex  # noqa: F401\n", import_ipex_code)
-            replaceTextInFile("model_management.py", "if not is_nvidia():", "if not is_nvidia() or is_intel_xpu():")
-            for i in range(2):
-                replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device):", "if not is_device_cpu(tensor.device) or is_intel_xpu():")
+from ipex_to_cuda import ipex_init
+print(f\"ipex_init: {ipex_init()}\")
+"""
+            replaceTextInFile("model_management.py", "def is_intel_xpu():\n", import_ipex_code + "\ndef is_intel_xpu():#\n")
+            #for i in range(2):
+            #    replaceTextInFile("model_management.py", "if not is_device_cpu(tensor.device):", "if not is_device_cpu(tensor.device) or is_intel_xpu():")
             os.chdir("../..")
         else:
             clone_or_pull("https://github.com/bmaltais/kohya_ss.git", recursive=True)
             
         conda = Conda(condapath)
         if not os.path.isdir(CENVNAME):
-            conda.do(f"conda create -p ./{CENVNAME} python=3.10 -y")
+            conda.do(f"conda create -p ./{CENVNAME} python=3.12 -y")
         conda.do(f"conda activate ./{CENVNAME}")
         conda.do("conda install pkg-config libuv -y")
         if not IS_WINDOWS:
@@ -924,8 +933,10 @@ try:
             conda.pipinstall("--force-reinstall git+https://github.com/Disty0/ipex_to_cuda")
             if (chosen_custom_nodes > 0):
                 os.chdir("./ComfyUI/custom_nodes")
+                github_link_folder_re = re.compile(r"\/([^\/]+)$")
+
                 for cn in custom_nodes_info:
-                    folder = re.search(r"\/([^\/]+)$", cn.link)[1]
+                    folder = re.search(github_link_folder_re, cn.link)[1]
 
                     clone_or_pull(cn.link)
                     if (os.path.exists(f"./{folder}/requirements.txt")):
@@ -935,8 +946,14 @@ try:
                                 conda.pipinstall(" " + req_override)
                         else:
                             conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{folder}/requirements.txt")
-                    
-                #TODO: Implement Impact Pack setup
+
+                chosen_cn_folders = [re.search(github_link_folder_re, cn.link)[1] for cn in custom_nodes_info]
+                for cn_folder in os.listdir("./"):
+                    if not cn_folder in chosen_cn_folders and os.path.exists(f"./{cn_folder}/requirements.txt"):
+                        conda.pipinstall(f" -r ./ComfyUI/custom_nodes/{cn_folder}/requirements.txt")
+                        subprocess.call(("git", "pull"), cwd=os.getcwd()+f"/{cn_folder}")
+
+                #Not very todo anymore: Implement Impact Pack setup
                 os.chdir("../..")
 
             if (chosen_custom_nodes > 1):
@@ -971,8 +988,8 @@ try:
                 makeShortcut(f"{base_path}/{shortcut_name}.desktop", f"{base_path}/{FOLDERNAME}/{start_script_filename}", "", "/usr/share/icons/Humanity-Dark/apps/22/gsd-xrandr.svg", REPO_NAMES[chosen_install])
 
         if chosen_install == CHOSEN_INSTALL_COMFY:
-            make_script_and_shortcut("python ./main.py --bf16-unet --lowvram", "start_lowvram", "ComfyUI")
-            make_script_and_shortcut("python ./main.py --bf16-unet --reserve-vram 7", "start_lowervram", "ComfyUI_Lowervram")
+            make_script_and_shortcut("python ./main.py --bf16-unet --lowvram --cache-classic", "start_lowvram", "ComfyUI")
+            make_script_and_shortcut("python ./main.py --bf16-unet --reserve-vram 7 --cache-classic", "start_lowervram", "ComfyUI_Lowervram")
         elif chosen_install == CHOSEN_INSTALL_KOHYA:
             make_script_and_shortcut("python ./kohya_gui.py --listen 127.0.0.1 --server_port 7860 --inbrowser --noverify", "start_kohya", "Kohya_ss")
 
@@ -981,11 +998,24 @@ try:
         conda.end()
         print("", flush=True)
 
+        site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.12/site-packages"
+        if chosen_install == CHOSEN_INSTALL_COMFY:
+            print("Applying Kornia fixes...")
+            replaceTextInFile(f"./cenv/{site_packages}/kornia/geometry/epipolar/_metrics.py", "@torch.jit.script", "")
+            for i in range(5):
+                replaceTextInFile(f"./cenv/{site_packages}/kornia/geometry/epipolar/essential.py", "@torch.jit.script", "")
+            for i in range(3):
+                replaceTextInFile(f"./cenv/{site_packages}/kornia/geometry/epipolar/fundamental.py", "@torch.jit.script", "")
+
         if (chosen_install == CHOSEN_INSTALL_COMFY and chosen_custom_nodes > 0):
-            print("Applying SUPIR and Tiled Ksampler fixes...")
-            site_packages = "lib/site-packages" if IS_WINDOWS else "lib/python3.10/site-packages"
-            replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)") # Formerly SUPIR dependency... I'll keep it
+            print("Applying Spectrum and Tiled Ksampler fixes...")
+            #replaceTextInFile(f"./cenv/{site_packages}/open_clip/transformer.py", "x.to(torch.float32)", "x.to(self.weight.dtype)") # Formerly SUPIR dependency... I'll keep it
             #replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-SUPIR/sgm/modules/diffusionmodules/sampling.py", "mps(device):", "mps(device) or comfy.model_management.is_intel_xpu():")
+            
+            replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-Spectrum-sdxl/src/spectrum_node.py", "with torch.cuda.stream(torch.cuda.default_stream()):", "with torch.no_grad():")
+            for i in range(3):
+                replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI-Spectrum-sdxl/src/spectrum_node.py", "print(f\"", "#print(\"\")")
+            
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.float().to(model.device)", "hint.float().to(model.control_model.device)")
             replaceTextInFile("./ComfyUI/custom_nodes/ComfyUI_TiledKSampler/nodes.py", "hint.to(model.control_model.dtype).to(model.device)", "hint.to(model.control_model.dtype).to(model.control_model.device)")
             print("Done.")
